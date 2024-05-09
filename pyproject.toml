@@ -1,0 +1,40 @@
+[project]
+name = "ukroutes"
+version = "0.1.0"
+description = "Add your description here"
+authors = [
+    { name = "cjber", email = "cjberragan@gmail.com" }
+]
+dependencies = [
+    "cudf-cu12>=24.4.0",
+    "cuml-cu12>=24.4.0",
+    "cugraph-cu12>=24.4.0",
+    "cuspatial-cu12>=24.4.0",
+    "cuproj-cu12>=24.4.0",
+    "dask-cuda>=24.4.0",
+    "rich>=13.7.1",
+    "tqdm>=4.66.2",
+    "ipdb>=0.13.13",
+    "polars>=0.20.25",
+    "pyogrio>=0.8.0",
+    "requests>=2.31.0",
+]
+readme = "README.md"
+requires-python = ">= 3.10"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.rye]
+managed = true
+dev-dependencies = [
+    "ipython>=8.23.0",
+    "sourcery-cli>=1.16.0",
+]
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["ukroutes"]
