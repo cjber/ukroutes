@@ -1,14 +1,12 @@
-import cudf
 import geopandas as gpd
 import polars as pl
-import requests
 from cuml.neighbors.nearest_neighbors import NearestNeighbors
 
 from ukroutes.common.logger import logger
 from ukroutes.common.utils import Paths
 
 
-def road_edges() -> pl.DataFrame:
+def process_road_edges() -> pl.DataFrame:
     """
     Create time estimates for road edges based on OS documentation
 
@@ -84,48 +82,86 @@ def road_edges() -> pl.DataFrame:
     return road_edges.select(["start_node", "end_node", "time_weighted", "length"])
 
 
-def ferry_routes(road_nodes: pl.DataFrame) -> pl.DataFrame:
-    # http://overpass-turbo.eu/?q=LyoKVGhpcyBoYcSGYmVlbiBnxI1lcmF0ZWQgYnkgdGhlIG92xJJwxIlzLXR1cmJvIHdpemFyZC7EgsSdxJ9yaWdpbmFsIHNlxLBjaMSsxIk6CsOiwoDCnHJvdcSVPWbEknJ5xYjCnQoqLwpbxYx0Ompzb25dW3RpbWXFmzoyNV07Ci8vxI_ElMSdciByZXN1bHRzCigKICDFryBxdcSSxJrEo3J0IGZvcjogxYjFisWbZcWPxZHFk8KAxZXGgG5vZGVbIsWLxY1lIj0ixZByxZIiXSh7e2LEqnh9fSnFrcaAd2F5xp_GocSVxqTGpsaWxqrGrMauxrDGssa0xb_FtWVsxJRpxaDGusaTxr3Gp8apxqvGrcavb8axxrPFrceFxoJwxLduxorFtsW4xbrFvMWbxJjGnHnFrT7Frcejc2vHiMaDdDs&c=BH1aTWQmgG
-    ferries = gpd.read_file(Paths.RAW / "oproad" / "ferries.geojson")
-    ferry_nodes = ferries[ferries["id"].str.startswith("node")].copy()
-    ferry_nodes["easting"], ferry_nodes["northing"] = (
-        ferry_nodes.geometry.x,
-        ferry_nodes.geometry.y,
-    )
-    ferry_edges = ferries[ferries["id"].str.startswith("relation")].copy()
-    ferries["easting"], ferries["northing"] = ferries.geometry.x, ferries.geometry.y
-
-
-def road_nodes() -> pl.DataFrame:
-    road_nodes = gpd.read_file(
-        Paths.OPROAD, layer="road_node", pyarrow=True, engine="pyorgio"
-    )
+def process_road_nodes() -> pl.DataFrame:
+    road_nodes = gpd.read_file(Paths.OPROAD, layer="road_node", engine="pyogrio")
     road_nodes["easting"], road_nodes["northing"] = (
         road_nodes.geometry.x,
         road_nodes.geometry.y,
     )
-    road_nodes = pl.from_pandas(road_nodes[["id", "easting", "northing"]]).rename(
+    return pl.from_pandas(road_nodes[["id", "easting", "northing"]]).rename(
         {"id": "node_id"}
     )
-    ferry_nodes, ferry_edges = ferry_routes(road_nodes)
 
-    road_nodes = road_nodes[["node_id", "easting", "northing"]].append(ferry_nodes)
-    road_edges = road_edges.reset_index(drop=True).append(ferry_edges)
 
-    road_nodes[Paths.NODE_COLS].to_parquet(
-        Paths.OS_GRAPH / "nodes.parquet", index=False
+def ferry_routes(road_nodes: pl.DataFrame) -> tuple[pl.DataFrame, pl.DataFrame]:
+    # http://overpass-turbo.eu/?q=LyoKVGhpcyBoYcSGYmVlbiBnxI1lcmF0ZWQgYnkgdGhlIG92xJJwxIlzLXR1cmJvIHdpemFyZC7EgsSdxJ9yaWdpbmFsIHNlxLBjaMSsxIk6CsOiwoDCnHJvdcSVPWbEknJ5xYjCnQoqLwpbxYx0Ompzb25dW3RpbWXFmzoyNV07Ci8vxI_ElMSdciByZXN1bHRzCigKICDFryBxdcSSxJrEo3J0IGZvcjogxYjFisWbZcWPxZHFk8KAxZXGgG5vZGVbIsWLxY1lIj0ixZByxZIiXSh7e2LEqnh9fSnFrcaAd2F5xp_GocSVxqTGpsaWxqrGrMauxrDGssa0xb_FtWVsxJRpxaDGusaTxr3Gp8apxqvGrcavb8axxrPFrceFxoJwxLduxorFtsW4xbrFvMWbxJjGnHnFrT7Frcejc2vHiMaDdDs&c=BH1aTWQmgG
+
+    ferries = gpd.read_file(Paths.RAW / "oproad" / "ferries.geojson")[
+        ["id", "geometry"]
+    ].to_crs("EPSG:27700")
+    ferry_nodes = (
+        ferries[ferries["id"].str.startswith("node")].copy().reset_index(drop=True)
     )
-    logger.debug(f"Nodes saved to {Paths.OS_GRAPH / 'nodes.parquet'}")
-    road_edges.reset_index()[Paths.EDGE_COLS].to_parquet(
-        Paths.OS_GRAPH / "edges.parquet", index=False
+    ferry_nodes["easting"], ferry_nodes["northing"] = (
+        ferry_nodes.geometry.x,
+        ferry_nodes.geometry.y,
     )
-    pass
+    ferry_edges = (
+        ferries[ferries["id"].str.startswith("relation")]
+        .explode(index_parts=False)
+        .copy()
+        .reset_index(drop=True)
+    )
+    road_nodes = road_nodes.to_pandas().copy()
+    nbrs = NearestNeighbors(n_neighbors=1).fit(road_nodes[["easting", "northing"]])
+    indices = nbrs.kneighbors(
+        ferry_nodes[["easting", "northing"]], return_distance=False
+    )
+    ferry_nodes["node_id"] = road_nodes.iloc[indices]["node_id"].reset_index(drop=True)
+
+    ferry_edges["length"] = ferry_edges["geometry"].apply(lambda x: x.length)
+    ferry_edges = ferry_edges.assign(
+        time_weighted=(ferry_edges["length"].astype(float) / 1000) / 25 * 1.609344 * 60
+    )
+
+    ferry_edges["start_node"] = ferry_edges["geometry"].apply(lambda x: x.coords[0])
+    ferry_edges["easting"], ferry_edges["northing"] = (
+        ferry_edges["start_node"].apply(lambda x: x[0]),
+        ferry_edges["start_node"].apply(lambda x: x[1]),
+    )
+    indices = nbrs.kneighbors(
+        ferry_edges[["easting", "northing"]], return_distance=False
+    )
+    ferry_edges["start_node"] = road_nodes.iloc[indices]["node_id"].reset_index(
+        drop=True
+    )
+
+    ferry_edges["end_node"] = ferry_edges["geometry"].apply(lambda x: x.coords[-1])
+    ferry_edges["easting"], ferry_edges["northing"] = (
+        ferry_edges["end_node"].apply(lambda x: x[0]),
+        ferry_edges["end_node"].apply(lambda x: x[1]),
+    )
+    indices = nbrs.kneighbors(
+        ferry_edges[["easting", "northing"]], return_distance=False
+    )
+    ferry_edges["end_node"] = road_nodes.iloc[indices]["node_id"].reset_index(drop=True)
+    return (
+        pl.from_pandas(ferry_nodes[["node_id", "easting", "northing"]]),
+        pl.from_pandas(
+            ferry_edges[["start_node", "end_node", "time_weighted", "length"]]
+        ),
+    )
 
 
-def main():
+def process_os():
     logger.info("Starting OS highways processing...")
+    edges = process_road_edges()
+    nodes = process_road_nodes()
+    ferry_nodes, ferry_edges = ferry_routes(nodes)
+    nodes = pl.concat([nodes, ferry_nodes])
+    edges = pl.concat([edges, ferry_edges])
+
+    nodes.write_parquet(Paths.OS_GRAPH / "nodes.parquet")
+    logger.debug(f"Nodes saved to {Paths.OS_GRAPH / 'nodes.parquet'}")
+    edges.write_parquet(Paths.OS_GRAPH / "edges.parquet")
     logger.debug(f"Edges saved to {Paths.OS_GRAPH / 'edges.parquet'}")
-
-
-if __name__ == "__main__":
-    edges = road_edges()

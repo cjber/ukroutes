@@ -60,10 +60,10 @@ class Routing:
         self.graph = cugraph.Graph()
         self.graph.from_cudf_edgelist(
             self.road_edges,
-            source="source",
-            destination="target",
+            source="start_node",
+            destination="end_node",
             edge_attr=self.weights,
-            renumber=False,
+            renumber=True,
         )
 
         self.distances: cudf.DataFrame = cudf.DataFrame()

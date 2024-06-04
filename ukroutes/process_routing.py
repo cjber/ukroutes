@@ -31,9 +31,7 @@ def nearest_nodes(df: cudf.DataFrame, nodes: cudf.DataFrame) -> cudf.DataFrame:
         nodes[["easting", "northing"]]
     )
     _, indices = nbrs.kneighbors(df[["easting", "northing"]])
-    df = df.assign(
-        node_id=nodes.iloc[indices]["node_id"].reset_index(drop=True).values.get()
-    )
+    df["node_id"] = nodes.iloc[indices]["node_id"].reset_index(drop=True).to_arrow()
     return df
 
 
@@ -103,6 +101,18 @@ def get_buffers(
         .dropna()
         .drop_duplicates("node_id")
     )
+
+
+def process_pcs():
+    nodes: cudf.DataFrame = cudf.from_pandas(
+        pd.read_parquet(Paths.OS_GRAPH / "nodes.parquet")
+    )
+    pcs = pd.read_csv(Paths.RAW / "onspd" / "ONSPD_FEB_2024.csv").rename(
+        columns={"PCD": "postcode", "OSEAST1M": "easting", "OSNRTH1M": "northing"}
+    )
+    pcs = pcs[["postcode", "easting", "northing"]].dropna()
+    pcs = nearest_nodes(pcs, nodes=nodes)
+    pcs.to_parquet(Paths.PROCESSED / "postcodes.parquet")
 
 
 def process_routing(df: pd.DataFrame, name: str):
