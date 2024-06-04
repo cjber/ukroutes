@@ -165,3 +165,6 @@ def process_os():
     logger.debug(f"Nodes saved to {Paths.OS_GRAPH / 'nodes.parquet'}")
     edges.write_parquet(Paths.OS_GRAPH / "edges.parquet")
     logger.debug(f"Edges saved to {Paths.OS_GRAPH / 'edges.parquet'}")
+
+if __name__ == "__main__":
+    process_os()
