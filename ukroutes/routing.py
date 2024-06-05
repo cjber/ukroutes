@@ -1,4 +1,5 @@
 from __future__ import annotations
+import cupy as cp
 
 import time
 import warnings
@@ -46,7 +47,7 @@ class Routing:
         sources: cudf.DataFrame,
         targets: pd.DataFrame,
         weights: str = "time_weighted",
-        buffer: int = 5_000,
+        buffer: int = 100_000,
     ):
         self.name: str = name
         self.sources: cudf.DataFrame = sources
@@ -90,69 +91,16 @@ class Routing:
         )
 
     def create_sub_graph(self, target) -> cugraph.Graph:
-        """
-        Create a subgraph of road nodes based on buffer distance
-
-        The subgraph is created using euclidean distance and
-        `cuspatial.points_in_spatial_window`. If buffers are not large enough to
-        include all nodes identified as important to that particular POI, it is
-        increased in size.
-
-        Parameters
-        ----------
-        poi : namedtuple
-            Single POI created by `df.itertuples()`
-
-        Returns
-        -------
-        cugraph.Graph:
-            Graph object that is a subset of all road nodes
-        """
-        buffer = max(target.buffer, self.buffer)
-        while True:
-            node_subset = cuspatial.points_in_spatial_window(
-                points=self.road_nodes["geometry"],  # type: ignore
-                min_x=target.easting - buffer,
-                max_x=target.easting + buffer,
-                min_y=target.northing - buffer,
-                max_y=target.northing + buffer,
-            )
-            node_subset = cudf.DataFrame(
-                {"easting": node_subset.points.x, "northing": node_subset.points.y}
-            ).merge(
-                cudf.DataFrame(self.road_nodes.drop("geometry", axis=1)),
-                on=["easting", "northing"],
-            )
-
-            with warnings.catch_warnings():
-                warnings.simplefilter(action="ignore", category=FutureWarning)
-                sub_graph = cugraph.subgraph(self.graph, node_subset["node_id"])  # type: ignore
-
-            if sub_graph is None:
-                continue
-
-            pc_nodes = cudf.Series(target.pc_node).isin(sub_graph.nodes()).sum()
-            poi_node = sub_graph.nodes().isin([target.node_id]).sum()
-
-            # ensure all postcode nodes in + poi node
-            # don't incrase buffer for large pois lists
-            if poi_node & (pc_nodes == len(target.pc_node)):
-                return sub_graph
-            buffer = buffer * 2
+        buffer = self.buffer
+        nodes_subset = self.road_nodes
+        nodes_subset["distance"] = cp.sqrt(
+            (nodes_subset["easting"] - target.easting) ** 2
+            + (nodes_subset["northing"] - target.northing) ** 2
+        )
+        nodes_subset = nodes_subset[nodes_subset["distance"] <= self.buffer]
+        return cugraph.subgraph(self.graph, nodes_subset["node_id"])
 
     def get_shortest_dists(self, target: NamedTuple) -> None:
-        """
-        Use `cugraph.sssp` to calculate shortest paths from POI to postcodes
-
-        First subsets road graph, then finds shortest paths, ensuring all paths are
-        routed that are known to be important to each POI. Saves to `hdf` to allow
-        restarts.
-
-        Parameters
-        ----------
-        poi : namedtuple
-            Single POI created from `df.itertuples()`
-        """
         if self.buffer:
             sub_graph = self.create_sub_graph(target=target)
         else:
