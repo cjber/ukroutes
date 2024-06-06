@@ -6,6 +6,7 @@
 #   features: []
 #   all-features: false
 #   with-sources: false
+#   generate-hashes: false
 
 -e file:.
 aiohttp==3.9.5
@@ -14,18 +15,17 @@ aiosignal==1.3.1
     # via aiohttp
 asttokens==2.4.1
     # via stack-data
+async-timeout==4.0.3
+    # via aiohttp
 attrs==23.2.0
     # via aiohttp
     # via fiona
 cachetools==5.3.3
     # via cudf-cu12
-certifi==2024.2.2
+certifi==2024.6.2
     # via fiona
     # via pyogrio
     # via pyproj
-    # via requests
-charset-normalizer==3.3.2
-    # via requests
 click==8.1.7
     # via click-plugins
     # via cligj
@@ -40,49 +40,39 @@ cligj==0.7.2
 cloudpickle==3.0.0
     # via dask
     # via distributed
-cuda-python==12.4.0
+cuda-python==12.5.0
     # via cudf-cu12
     # via pylibraft-cu12
     # via rmm-cu12
-cudf-cu12==24.4.0
+cudf-cu12==24.6.0
     # via cugraph-cu12
-    # via cuml-cu12
-    # via cuspatial-cu12
     # via dask-cudf-cu12
     # via ukroutes
-cugraph-cu12==24.4.0
-    # via ukroutes
-cuml-cu12==24.4.0
-    # via ukroutes
-cuproj-cu12==24.4.0
+cugraph-cu12==24.6.0
     # via ukroutes
 cupy-cuda12x==13.1.0
     # via cudf-cu12
     # via cugraph-cu12
-    # via cuml-cu12
-    # via cuproj-cu12
     # via dask-cudf-cu12
-cuspatial-cu12==24.4.0
-    # via ukroutes
-dask==2024.1.1
+dask==2024.5.1
     # via dask-expr
     # via distributed
     # via rapids-dask-dependency
-dask-cuda==24.4.0
+dask-cuda==24.6.0
     # via cugraph-cu12
-    # via cuml-cu12
     # via raft-dask-cu12
-    # via ukroutes
-dask-cudf-cu12==24.4.0
+dask-cudf-cu12==24.6.0
     # via cugraph-cu12
-    # via cuml-cu12
-dask-expr==0.4.0
+dask-expr==1.1.1
     # via rapids-dask-dependency
 decorator==5.1.1
-    # via ipdb
     # via ipython
-distributed==2024.1.1
+distributed==2024.5.1
     # via rapids-dask-dependency
+distributed-ucxx-cu12==0.38.0
+    # via raft-dask-cu12
+exceptiongroup==1.2.1
+    # via ipython
 executing==2.0.1
     # via stack-data
 fastrlock==0.8.2
@@ -92,29 +82,29 @@ fiona==1.9.6
 frozenlist==1.4.1
     # via aiohttp
     # via aiosignal
-fsspec==2024.3.1
+fsspec==2024.6.0
     # via cudf-cu12
     # via cugraph-cu12
     # via dask
     # via dask-cudf-cu12
-geopandas==0.14.3
-    # via cuspatial-cu12
+geopandas==0.14.4
+    # via ukroutes
+greenlet==3.0.3
+    # via sqlalchemy
 idna==3.7
-    # via requests
     # via yarl
 importlib-metadata==7.1.0
     # via dask
-ipdb==0.13.13
-    # via ukroutes
-ipython==8.23.0
-    # via ipdb
+ipython==8.25.0
 jedi==0.19.1
     # via ipython
-jinja2==3.1.3
+jinja2==3.1.4
     # via distributed
-joblib==1.4.0
-    # via cuml-cu12
+joblib==1.4.2
     # via raft-dask-cu12
+libucx-cu12==1.15.0.post1
+    # via ucx-py-cu12
+    # via ucxx-cu12
 llvmlite==0.42.0
     # via numba
 locket==1.0.0
@@ -136,17 +126,17 @@ multidict==6.0.5
 numba==0.59.1
     # via cudf-cu12
     # via cugraph-cu12
-    # via cuml-cu12
     # via dask-cuda
+    # via distributed-ucxx-cu12
     # via raft-dask-cu12
     # via rmm-cu12
 numpy==1.26.4
     # via cudf-cu12
     # via cugraph-cu12
     # via cupy-cuda12x
-    # via cuspatial-cu12
     # via dask-cuda
     # via dask-cudf-cu12
+    # via geopandas
     # via numba
     # via pandas
     # via pyarrow
@@ -156,8 +146,8 @@ numpy==1.26.4
     # via rmm-cu12
     # via scipy
     # via shapely
-    # via treelite
     # via ucx-py-cu12
+    # via ucxx-cu12
 nvtx==0.2.10
     # via cudf-cu12
 packaging==24.0
@@ -166,8 +156,7 @@ packaging==24.0
     # via distributed
     # via geopandas
     # via pyogrio
-    # via treelite
-pandas==2.2.1
+pandas==2.2.2
     # via cudf-cu12
     # via dask-cuda
     # via dask-cudf-cu12
@@ -175,39 +164,37 @@ pandas==2.2.1
     # via geopandas
 parso==0.8.4
     # via jedi
-partd==1.4.1
+partd==1.4.2
     # via dask
 pexpect==4.9.0
     # via ipython
-polars==0.20.25
+polars==0.20.31
     # via ukroutes
-prompt-toolkit==3.0.43
+prompt-toolkit==3.0.46
     # via ipython
-protobuf==4.25.3
-    # via cudf-cu12
 psutil==5.9.8
     # via distributed
 ptyprocess==0.7.0
     # via pexpect
 pure-eval==0.2.2
     # via stack-data
-pyarrow==14.0.2
+pyarrow==16.1.0
     # via cudf-cu12
     # via dask-expr
-pygments==2.17.2
+pygments==2.18.0
     # via ipython
     # via rich
-pylibcugraph-cu12==24.4.0
+pylibcugraph-cu12==24.6.0
     # via cugraph-cu12
-pylibraft-cu12==24.4.0
-    # via cuml-cu12
+pylibraft-cu12==24.6.0
     # via pylibcugraph-cu12
     # via raft-dask-cu12
-pynvjitlink-cu12==0.2.1
+pynvjitlink-cu12==0.2.3
     # via cudf-cu12
 pynvml==11.4.1
     # via dask-cuda
     # via ucx-py-cu12
+    # via ucxx-cu12
 pyogrio==0.8.0
     # via ukroutes
 pyproj==3.6.1
@@ -219,31 +206,25 @@ pytz==2024.1
 pyyaml==6.0.1
     # via dask
     # via distributed
-raft-dask-cu12==24.4.0
+raft-dask-cu12==24.6.0
     # via cugraph-cu12
-    # via cuml-cu12
-rapids-dask-dependency==24.4.1
+rapids-dask-dependency==24.6.0
     # via cugraph-cu12
-    # via cuml-cu12
     # via dask-cuda
     # via dask-cudf-cu12
+    # via distributed-ucxx-cu12
     # via raft-dask-cu12
-requests==2.31.0
-    # via ukroutes
 rich==13.7.1
     # via cudf-cu12
     # via ukroutes
-rmm-cu12==24.4.0
+rmm-cu12==24.6.0
     # via cudf-cu12
     # via cugraph-cu12
-    # via cuml-cu12
-    # via cuproj-cu12
-    # via cuspatial-cu12
     # via pylibcugraph-cu12
     # via pylibraft-cu12
-scipy==1.13.0
-    # via cuml-cu12
-    # via treelite
+    # via ucxx-cu12
+scipy==1.13.1
+    # via ukroutes
 shapely==2.0.4
     # via geopandas
 six==1.16.0
@@ -252,7 +233,8 @@ six==1.16.0
     # via python-dateutil
 sortedcontainers==2.4.0
     # via distributed
-sourcery-cli==1.16.0
+sqlalchemy==2.0.30
+    # via ukroutes
 stack-data==0.6.3
     # via ipython
 tblib==3.0.0
@@ -263,24 +245,24 @@ toolz==0.12.1
     # via partd
 tornado==6.4
     # via distributed
-tqdm==4.66.2
+tqdm==4.66.4
     # via ukroutes
 traitlets==5.14.3
     # via ipython
     # via matplotlib-inline
-treelite==4.1.2
-    # via cuml-cu12
-typing-extensions==4.11.0
+typing-extensions==4.12.1
     # via cudf-cu12
     # via ipython
+    # via sqlalchemy
 tzdata==2024.1
     # via pandas
-ucx-py-cu12==0.37.0
+ucx-py-cu12==0.38.0
     # via cugraph-cu12
     # via raft-dask-cu12
+ucxx-cu12==0.38.0
+    # via distributed-ucxx-cu12
 urllib3==2.2.1
     # via distributed
-    # via requests
 wcwidth==0.2.13
     # via prompt-toolkit
 yarl==1.9.4
@@ -288,5 +270,5 @@ yarl==1.9.4
 zict==3.0.0
     # via dask-cuda
     # via distributed
-zipp==3.18.1
+zipp==3.19.2
     # via importlib-metadata

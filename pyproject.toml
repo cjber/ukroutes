@@ -6,18 +6,15 @@ authors = [
     { name = "cjber", email = "cjberragan@gmail.com" }
 ]
 dependencies = [
-    "cudf-cu12>=24.4.0",
-    "cuml-cu12>=24.4.0",
+    "cudf-cu12>=24.4.1",
     "cugraph-cu12>=24.4.0",
-    "cuspatial-cu12>=24.4.0",
-    "cuproj-cu12>=24.4.0",
-    "dask-cuda>=24.4.0",
+    "sqlalchemy>=2.0.30",
+    "geopandas>=0.14.4",
+    "polars>=0.20.31",
+    "scipy>=1.13.1",
     "rich>=13.7.1",
-    "tqdm>=4.66.2",
-    "ipdb>=0.13.13",
-    "polars>=0.20.25",
     "pyogrio>=0.8.0",
-    "requests>=2.31.0",
+    "tqdm>=4.66.4",
 ]
 readme = "README.md"
 requires-python = ">= 3.10"
@@ -29,9 +26,11 @@ build-backend = "hatchling.build"
 [tool.rye]
 managed = true
 dev-dependencies = [
-    "ipython>=8.23.0",
-    "sourcery-cli>=1.16.0",
+    "ipython>=8.25.0",
 ]
+
+[tool.rye.scripts]
+requirements = "pip compile pyproject.toml -o requirements.txt"
 
 [tool.hatch.metadata]
 allow-direct-references = true
