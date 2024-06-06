@@ -44,7 +44,7 @@ class Routing:
         self,
         name: str,
         edges: cudf.DataFrame,
-        nodes: cudf.GeoDataFrame,
+        nodes: cudf.DataFrame,
         sources: cudf.DataFrame,
         targets: pd.DataFrame,
         weights: str = "time_weighted",
@@ -65,7 +65,7 @@ class Routing:
             source="start_node",
             destination="end_node",
             edge_attr=self.weights,
-            renumber=True,
+            renumber=False,
         )
 
         self.distances: cudf.DataFrame = cudf.DataFrame()
@@ -94,9 +94,9 @@ class Routing:
         logger.debug(f"Routing complete for {self.name} in {tdiff / 60:.2f} minutes.")
 
     def create_sub_graph(self, target) -> cugraph.Graph:
-        buffer = self.buffer
+        buffer = max(self.buffer, target.buffer)
         while True:
-            nodes_subset = self.road_nodes
+            nodes_subset = self.road_nodes.copy()
             nodes_subset["distance"] = cp.sqrt(
                 (nodes_subset["easting"] - target.easting) ** 2
                 + (nodes_subset["northing"] - target.northing) ** 2
@@ -106,11 +106,17 @@ class Routing:
             with warnings.catch_warnings():
                 warnings.simplefilter(action="ignore", category=FutureWarning)
                 sub_graph = cugraph.subgraph(self.graph, nodes_subset["node_id"])
+                if sub_graph is None:
+                    if buffer >= 1_000_000:
+                        sub_graph = self.graph
+                        return sub_graph
+                    buffer = buffer * 2
+                    continue
 
-            pc_nodes = cudf.Series(target.top_10_nodes).isin(sub_graph.nodes()).sum()
-            df_node = sub_graph.nodes().isin([target.node_id]).sum()
+            ntarget_nds = cudf.Series(target.top_nodes).isin(sub_graph.nodes()).sum()
+            df_node = target.node_id in sub_graph.nodes().to_arrow().to_pylist()
 
-            if df_node & (pc_nodes == len(target.top_10_nodes)) or buffer >= 500_000:
+            if df_node & (ntarget_nds == len(target.top_nodes)) or buffer >= 1_000_000:
                 return sub_graph
             buffer = buffer * 2
 

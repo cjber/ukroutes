@@ -28,7 +28,7 @@ def process_ev():
     return ev
 
 
-ev = process_ev()[:1000]
+ev = process_ev().sample(1_000)
 # process_os()
 
 nodes: cudf.DataFrame = cudf.from_pandas(
@@ -37,10 +37,10 @@ nodes: cudf.DataFrame = cudf.from_pandas(
 edges: cudf.DataFrame = cudf.from_pandas(
     pd.read_parquet(Paths.OS_GRAPH / "edges.parquet")
 )
-ev, nodes, edges = add_to_graph(ev, nodes, edges, "name", 10)
+ev, nodes, edges = add_to_graph(ev, nodes, edges, 10)
 
 postcodes = pd.read_parquet(Paths.PROCESSED / "postcodes.parquet")
-postcodes, nodes, edges = add_to_graph(postcodes, nodes, edges, "postcode")
+postcodes, nodes, edges = add_to_graph(postcodes, nodes, edges, 2)
 ev = add_topk(ev, postcodes)
 
 routing = Routing(
@@ -60,7 +60,6 @@ distances = (
     .join(postcodes.set_index("node_id"), how="right")
     .reset_index()
 )
-distances.dropna()
 
 OUT_FILE = Paths.OUT_DATA / "distances_ev.csv"
 distances.to_pandas()[["postcode", "distance"]].to_csv(OUT_FILE, index=False)

@@ -1,20 +1,20 @@
 import cudf
 import cupy as cp
+import numpy as np
 import pandas as pd
-from scipy.spatial import cKDTree
+from scipy.spatial import KDTree
 
 
-def add_to_graph(df, nodes, edges, keep_col, topk=10, target=None):
-    nodes_tree = cKDTree(nodes[["easting", "northing"]].values.get())
-    distances, indices = nodes_tree.query(df[["easting", "northing"]].values)
+def add_to_graph(df, nodes, edges, k=10):
+    nodes_tree = KDTree(nodes[["easting", "northing"]].values.get())
+    distances, indices = nodes_tree.query(df[["easting", "northing"]].values, k=k)
 
     nearest_nodes_df = pd.DataFrame(
         {
-            keep_col: df[keep_col],
-            "nearest_node": nodes.iloc[indices]["node_id"]
+            "nearest_node": nodes.iloc[indices.flatten()]["node_id"]
             .reset_index(drop=True)
             .to_numpy(),
-            "distance": distances,
+            "distance": distances.flatten() + 0.01,
         }
     )
 
@@ -25,21 +25,59 @@ def add_to_graph(df, nodes, edges, keep_col, topk=10, target=None):
 
     new_edges = cudf.DataFrame(
         {
-            "start_node": df["node_id"],
+            "start_node": df.loc[np.repeat(df.index, k)].reset_index(drop=True)[
+                "node_id"
+            ],
             "end_node": nearest_nodes_df["nearest_node"],
             "length": nearest_nodes_df["distance"],
         }
     )
+    new_edges["time_weighted"] = (
+        (new_edges["length"].astype(float) / 1000) / 25 * 1.609344 * 60
+    )
     edges = cudf.concat([edges, new_edges])
-    edges["time_weighted"] = (edges["length"].astype(float) / 1000) / 25 * 1.609344 * 60
 
-    return df, nodes, edges
+    return (
+        df.reset_index(drop=True),
+        nodes.reset_index(drop=True),
+        edges.reset_index(drop=True),
+    )
 
 
 def add_topk(df, target, k=10):
-    target_tree = cKDTree(target[["easting", "northing"]].values)
-    distances, indices = target_tree.query(df[["easting", "northing"]].values, k=k)
-    df["top_10_nodes"] = (
-        target.iloc[indices.flatten()]["node_id"].values.reshape(-1, k).tolist()
+    df_tree = KDTree(df[["easting", "northing"]].values)
+    distances, indices = df_tree.query(target[["easting", "northing"]].values, k=k)
+
+    indices = pd.DataFrame(indices)
+    df = (
+        pd.concat([target.reset_index(drop=True), indices], axis=1)[
+            ["node_id"] + indices.columns.tolist()
+        ]
+        .set_index("node_id")
+        .stack()
+        .rename("df_idx")
+        .reset_index()
+        .rename(columns={"node_id": "top_nodes"})
+        .drop("level_1", axis=1)
+        .groupby("df_idx")
+        .agg(list)
+        .join(df, how="right")
     )
-    return df
+    df["top_nodes"] = df["top_nodes"].apply(
+        lambda row: list(set(row)) if isinstance(row, list) else row
+    )
+    distances = pd.DataFrame(distances).stack().rename("buffer").reset_index()
+    indices = indices.stack().rename("node_id").reset_index()
+
+    buffers = (
+        pd.DataFrame(
+            {
+                "node_id": df.iloc[indices["node_id"].values]["node_id"],
+                "buffer": distances["buffer"].values,
+            }
+        )
+        .sort_values("buffer", ascending=False)
+        .drop_duplicates("node_id")
+    )
+
+    return df.merge(buffers, on="node_id", how="left")

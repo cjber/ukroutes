@@ -1,6 +1,6 @@
 import geopandas as gpd
 import polars as pl
-from scipy.spatial import cKDTree
+from scipy.spatial import KDTree
 
 from ukroutes.common.logger import logger
 from ukroutes.common.utils import Paths
@@ -114,7 +114,7 @@ def ferry_routes(road_nodes: pl.DataFrame) -> tuple[pl.DataFrame, pl.DataFrame]:
     )
     road_nodes = road_nodes.to_pandas().copy()
 
-    nodes_tree = cKDTree(road_nodes[["easting", "northing"]].values)
+    nodes_tree = KDTree(road_nodes[["easting", "northing"]].values)
     distances, indices = nodes_tree.query(ferry_nodes[["easting", "northing"]].values)
     ferry_nodes["node_id"] = road_nodes.iloc[indices]["node_id"].reset_index(drop=True)
 
