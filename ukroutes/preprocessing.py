@@ -1,6 +1,6 @@
 import geopandas as gpd
 import polars as pl
-from cuml.neighbors.nearest_neighbors import NearestNeighbors
+from scipy.spatial import cKDTree
 
 from ukroutes.common.logger import logger
 from ukroutes.common.utils import Paths
@@ -113,10 +113,9 @@ def ferry_routes(road_nodes: pl.DataFrame) -> tuple[pl.DataFrame, pl.DataFrame]:
         .reset_index(drop=True)
     )
     road_nodes = road_nodes.to_pandas().copy()
-    nbrs = NearestNeighbors(n_neighbors=1).fit(road_nodes[["easting", "northing"]])
-    indices = nbrs.kneighbors(
-        ferry_nodes[["easting", "northing"]], return_distance=False
-    )
+
+    nodes_tree = cKDTree(road_nodes[["easting", "northing"]].values)
+    distances, indices = nodes_tree.query(ferry_nodes[["easting", "northing"]].values)
     ferry_nodes["node_id"] = road_nodes.iloc[indices]["node_id"].reset_index(drop=True)
 
     ferry_edges["length"] = ferry_edges["geometry"].apply(lambda x: x.length)
@@ -129,9 +128,7 @@ def ferry_routes(road_nodes: pl.DataFrame) -> tuple[pl.DataFrame, pl.DataFrame]:
         ferry_edges["start_node"].apply(lambda x: x[0]),
         ferry_edges["start_node"].apply(lambda x: x[1]),
     )
-    indices = nbrs.kneighbors(
-        ferry_edges[["easting", "northing"]], return_distance=False
-    )
+    distances, indices = nodes_tree.query(ferry_edges[["easting", "northing"]])
     ferry_edges["start_node"] = road_nodes.iloc[indices]["node_id"].reset_index(
         drop=True
     )
@@ -141,9 +138,7 @@ def ferry_routes(road_nodes: pl.DataFrame) -> tuple[pl.DataFrame, pl.DataFrame]:
         ferry_edges["end_node"].apply(lambda x: x[0]),
         ferry_edges["end_node"].apply(lambda x: x[1]),
     )
-    indices = nbrs.kneighbors(
-        ferry_edges[["easting", "northing"]], return_distance=False
-    )
+    distances, indices = nodes_tree.query(ferry_edges[["easting", "northing"]])
     ferry_edges["end_node"] = road_nodes.iloc[indices]["node_id"].reset_index(drop=True)
     return (
         pl.from_pandas(ferry_nodes[["node_id", "easting", "northing"]]),
@@ -158,12 +153,19 @@ def process_os():
     edges = process_road_edges()
     nodes = process_road_nodes()
     ferry_nodes, ferry_edges = ferry_routes(nodes)
-    nodes = pl.concat([nodes, ferry_nodes])
-    edges = pl.concat([edges, ferry_edges])
+    nodes = pl.concat([nodes, ferry_nodes]).to_pandas()
+    edges = pl.concat([edges, ferry_edges]).to_pandas()
 
-    nodes.write_parquet(Paths.OS_GRAPH / "nodes.parquet")
+    unique_node_ids = nodes["node_id"].unique()
+    node_id_mapping = {
+        node_id: new_id for new_id, node_id in enumerate(unique_node_ids)
+    }
+    nodes["node_id"] = nodes["node_id"].map(node_id_mapping)
+    edges["start_node"] = edges["start_node"].map(node_id_mapping)
+    edges["end_node"] = edges["end_node"].map(node_id_mapping)
+    nodes.to_parquet(Paths.OS_GRAPH / "nodes.parquet", index=False)
     logger.debug(f"Nodes saved to {Paths.OS_GRAPH / 'nodes.parquet'}")
-    edges.write_parquet(Paths.OS_GRAPH / "edges.parquet")
+    edges.to_parquet(Paths.OS_GRAPH / "edges.parquet", index=False)
     logger.debug(f"Edges saved to {Paths.OS_GRAPH / 'edges.parquet'}")
 
 

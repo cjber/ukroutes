@@ -1,5 +1,4 @@
 import cudf
-import cuspatial
 import geopandas as gpd
 import numpy as np
 import pandas as pd
@@ -32,13 +31,15 @@ def process_ev():
 ev = process_ev()[:1000]
 process_os()
 
-nodes: cudf.DataFrame = cudf.read_parquet(Paths.OS_GRAPH / "nodes.parquet")  # type:ignore
-edges: cudf.DataFrame = cudf.read_parquet(Paths.OS_GRAPH / "edges.parquet")  # type:ignore
-ev, nodes, edges = add_to_graph(ev, nodes, edges, "name")
-
-postcodes: cudf.DataFrame = pd.read_parquet(  # type:ignore
-    Paths.PROCESSED / "postcodes.parquet"
+nodes: cudf.DataFrame = cudf.from_pandas(
+    pd.read_parquet(Paths.OS_GRAPH / "nodes.parquet")
 )
+edges: cudf.DataFrame = cudf.from_pandas(
+    pd.read_parquet(Paths.OS_GRAPH / "edges.parquet")
+)
+ev, nodes, edges = add_to_graph(ev, nodes, edges, "name", 10)
+
+postcodes: cudf.DataFrame = pd.read_parquet(Paths.PROCESSED / "postcodes.parquet")
 postcodes, nodes, edges = add_to_graph(postcodes, nodes, edges, "postcode")
 
 routing = Routing(
@@ -48,9 +49,10 @@ routing = Routing(
     sources=postcodes,
     targets=ev,
     weights="time_weighted",
-    buffer=100_000,
+    buffer=5_000,
 )
 routing.fit()
+distances = routing.fetch_distances()
 
 distances = (
     routing.distances.set_index("vertex")

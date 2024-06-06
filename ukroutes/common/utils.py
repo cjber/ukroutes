@@ -1,11 +1,11 @@
 from pathlib import Path
 
-import polars as pl
-
-pl.Config.set_tbl_formatting("NOTHING")
-pl.Config.with_columns_kwargs = True
-pl.Config.set_tbl_dataframe_shape_below(True)
-pl.Config.set_tbl_rows(6)
+# import polars as pl
+#
+# pl.Config.set_tbl_formatting("NOTHING")
+# pl.Config.with_columns_kwargs = True
+# pl.Config.set_tbl_dataframe_shape_below(True)
+# pl.Config.set_tbl_rows(6)
 
 
 class Paths:

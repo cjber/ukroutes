@@ -1,15 +1,16 @@
 from __future__ import annotations
-import cupy as cp
 
 import time
 import warnings
+from pathlib import Path
 from typing import NamedTuple
 
 import cudf
 import cugraph
-import cuspatial
+import cupy as cp
 import pandas as pd
 from rich.progress import track
+from sqlalchemy import create_engine
 
 from ukroutes.common.logger import logger
 
@@ -43,7 +44,7 @@ class Routing:
         self,
         name: str,
         edges: cudf.DataFrame,
-        nodes: cuspatial.GeoDataFrame,
+        nodes: cudf.GeoDataFrame,
         sources: cudf.DataFrame,
         targets: pd.DataFrame,
         weights: str = "time_weighted",
@@ -54,7 +55,7 @@ class Routing:
         self.targets: pd.DataFrame = targets
 
         self.road_edges: cudf.DataFrame = edges
-        self.road_nodes: cuspatial.GeoDataFrame = nodes
+        self.road_nodes: cudf.GeoDataFrame = nodes
         self.weights: str = weights
         self.buffer: int = buffer
 
@@ -68,6 +69,11 @@ class Routing:
         )
 
         self.distances: cudf.DataFrame = cudf.DataFrame()
+
+        db_path = Path("distances.db")
+        if db_path.exists():
+            db_path.unlink()
+        self.engine = create_engine(f"sqlite:///{db_path}")
 
     def fit(self) -> None:
         """
@@ -92,29 +98,37 @@ class Routing:
 
     def create_sub_graph(self, target) -> cugraph.Graph:
         buffer = self.buffer
-        nodes_subset = self.road_nodes
-        nodes_subset["distance"] = cp.sqrt(
-            (nodes_subset["easting"] - target.easting) ** 2
-            + (nodes_subset["northing"] - target.northing) ** 2
-        )
-        nodes_subset = nodes_subset[nodes_subset["distance"] <= self.buffer]
-        return cugraph.subgraph(self.graph, nodes_subset["node_id"])
+        while True:
+            nodes_subset = self.road_nodes
+            nodes_subset["distance"] = cp.sqrt(
+                (nodes_subset["easting"] - target.easting) ** 2
+                + (nodes_subset["northing"] - target.northing) ** 2
+            )
+            nodes_subset = nodes_subset[nodes_subset["distance"] <= self.buffer]
+
+            with warnings.catch_warnings():
+                warnings.simplefilter(action="ignore", category=FutureWarning)
+                sub_graph = cugraph.subgraph(self.graph, nodes_subset["node_id"])
+
+            pc_nodes = cudf.Series(target.top_10_nodes).isin(sub_graph.nodes()).sum()
+            df_node = sub_graph.nodes().isin([target.node_id]).sum()
+
+            if df_node & (pc_nodes == len(target.top_10_nodes)):
+                return sub_graph
+            buffer = buffer * 2
 
     def get_shortest_dists(self, target: NamedTuple) -> None:
-        if self.buffer:
-            sub_graph = self.create_sub_graph(target=target)
-        else:
-            sub_graph = self.graph
-
-        shortest_paths: cudf.DataFrame = cugraph.filter_unreachable(  # type: ignore
-            cugraph.sssp(sub_graph, source=target.node_id)  # type:ignore
+        sub_graph = self.create_sub_graph(target=target) if self.buffer else self.graph
+        shortest_paths: cudf.DataFrame = cugraph.filter_unreachable(
+            cugraph.sssp(sub_graph, source=target.node_id)
         )
         pc_dist = shortest_paths[shortest_paths.vertex.isin(self.sources["node_id"])]
+        pc_dist.to_pandas().to_sql("distances", self.engine, if_exists="append")
 
-        self.distances = cudf.concat([self.distances, pc_dist])
-
-        self.distances = (
-            self.distances.sort_values("distance")
+    def fetch_distances(self):
+        return (
+            pd.read_sql("distances", self.engine)
+            .sort_values("distance")
             .drop_duplicates("vertex")
             .reset_index()[["vertex", "distance"]]
         )
