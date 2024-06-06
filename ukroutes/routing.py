@@ -110,7 +110,7 @@ class Routing:
             pc_nodes = cudf.Series(target.top_10_nodes).isin(sub_graph.nodes()).sum()
             df_node = sub_graph.nodes().isin([target.node_id]).sum()
 
-            if df_node & (pc_nodes == len(target.top_10_nodes)):
+            if df_node & (pc_nodes == len(target.top_10_nodes)) or buffer >= 500_000:
                 return sub_graph
             buffer = buffer * 2
 
