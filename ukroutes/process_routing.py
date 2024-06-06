@@ -4,29 +4,20 @@ import pandas as pd
 from scipy.spatial import cKDTree
 
 
-def add_to_graph(df, nodes, edges, keep_col, topk=1):
+def add_to_graph(df, nodes, edges, keep_col, topk=10, target=None):
     nodes_tree = cKDTree(nodes[["easting", "northing"]].values.get())
-    distances, indices = nodes_tree.query(df[["easting", "northing"]].values, k=topk)
-    if topk > 1:
-        indices_1 = indices[:, 0]
-        distances_1 = distances[:, 0]
-    else:
-        indices_1 = indices
-        distances_1 = distances
+    distances, indices = nodes_tree.query(df[["easting", "northing"]].values)
 
     nearest_nodes_df = pd.DataFrame(
         {
             keep_col: df[keep_col],
-            "nearest_node": nodes.iloc[indices_1]["node_id"]
+            "nearest_node": nodes.iloc[indices]["node_id"]
             .reset_index(drop=True)
             .to_numpy(),
-            "distance": distances_1,
+            "distance": distances,
         }
     )
 
-    df["top_10_nodes"] = (
-        nodes.iloc[indices.flatten()]["node_id"].values.reshape(-1, topk).tolist()
-    )
     new_node_ids = cp.arange(len(nodes) + 1, len(nodes) + 1 + len(df))
     df["node_id"] = new_node_ids.get()
     new_nodes = df[["node_id", "easting", "northing"]]
@@ -43,3 +34,12 @@ def add_to_graph(df, nodes, edges, keep_col, topk=1):
     edges["time_weighted"] = (edges["length"].astype(float) / 1000) / 25 * 1.609344 * 60
 
     return df, nodes, edges
+
+
+def add_topk(df, target, k=10):
+    target_tree = cKDTree(target[["easting", "northing"]].values)
+    distances, indices = target_tree.query(df[["easting", "northing"]].values, k=k)
+    df["top_10_nodes"] = (
+        target.iloc[indices.flatten()]["node_id"].values.reshape(-1, k).tolist()
+    )
+    return df

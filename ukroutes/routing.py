@@ -91,10 +91,7 @@ class Routing:
             self.get_shortest_dists(target)
         t2 = time.time()
         tdiff = t2 - t1
-        logger.debug(
-            f"Routing complete for {self.name} in {tdiff / 60:.2f} minutes,"
-            " finding minimum distances."
-        )
+        logger.debug(f"Routing complete for {self.name} in {tdiff / 60:.2f} minutes.")
 
     def create_sub_graph(self, target) -> cugraph.Graph:
         buffer = self.buffer

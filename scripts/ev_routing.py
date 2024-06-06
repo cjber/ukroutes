@@ -6,7 +6,7 @@ import pandas as pd
 from ukroutes import Routing
 from ukroutes.common.utils import Paths
 from ukroutes.preprocessing import process_os
-from ukroutes.process_routing import add_to_graph
+from ukroutes.process_routing import add_to_graph, add_topk
 
 
 def process_ev():
@@ -29,7 +29,7 @@ def process_ev():
 
 
 ev = process_ev()[:1000]
-process_os()
+# process_os()
 
 nodes: cudf.DataFrame = cudf.from_pandas(
     pd.read_parquet(Paths.OS_GRAPH / "nodes.parquet")
@@ -39,8 +39,9 @@ edges: cudf.DataFrame = cudf.from_pandas(
 )
 ev, nodes, edges = add_to_graph(ev, nodes, edges, "name", 10)
 
-postcodes: cudf.DataFrame = pd.read_parquet(Paths.PROCESSED / "postcodes.parquet")
+postcodes = pd.read_parquet(Paths.PROCESSED / "postcodes.parquet")
 postcodes, nodes, edges = add_to_graph(postcodes, nodes, edges, "postcode")
+ev = add_topk(ev, postcodes)
 
 routing = Routing(
     name="ev",
@@ -55,9 +56,11 @@ routing.fit()
 distances = routing.fetch_distances()
 
 distances = (
-    routing.distances.set_index("vertex")
+    distances.set_index("vertex")
     .join(postcodes.set_index("node_id"), how="right")
     .reset_index()
 )
+distances.dropna()
+
 OUT_FILE = Paths.OUT_DATA / "distances_ev.csv"
 distances.to_pandas()[["postcode", "distance"]].to_csv(OUT_FILE, index=False)
