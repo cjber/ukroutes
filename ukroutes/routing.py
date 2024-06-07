@@ -49,7 +49,7 @@ class Routing:
         targets: pd.DataFrame,
         weights: str = "time_weighted",
         buffer: int = 100_000,
-        cutoff: int = 60,
+        cutoff: int | None = None,
     ):
         self.name: str = name
         self.sources: cudf.DataFrame = sources
@@ -118,7 +118,9 @@ class Routing:
                     continue
 
             ntarget_nds = cudf.Series(target.top_nodes).isin(sub_graph.nodes()).sum()
-            df_node = target.node_id in sub_graph.nodes().to_arrow().to_pylist()
+            subgraph_nodes = sub_graph.nodes().to_arrow().to_pylist()
+            if subgraph_nodes:
+                df_node = target.node_id in subgraph_nodes
 
             if df_node & (ntarget_nds == len(target.top_nodes)) or buffer >= 1_000_000:
                 return sub_graph
