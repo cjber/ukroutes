@@ -79,6 +79,6 @@ def add_topk(df, target, k=10):
         .sort_values("buffer", ascending=False)
         .drop_duplicates("node_id")
     )
-    buffers = buffers[buffers["buffer"].apply(lambda x: isinstance(x, list))]
+    df = df[df["top_nodes"].apply(lambda x: isinstance(x, list))]
 
     return df.merge(buffers, on="node_id", how="left")

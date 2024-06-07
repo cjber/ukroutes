@@ -29,7 +29,7 @@ def process_ev():
 
 
 ev = process_ev()[:1000]
-process_os()
+# process_os()
 
 nodes: cudf.DataFrame = cudf.from_pandas(
     pd.read_parquet(Paths.OS_GRAPH / "nodes.parquet")
@@ -42,7 +42,6 @@ ev, nodes, edges = add_to_graph(ev, nodes, edges, 1)
 postcodes = pd.read_parquet(Paths.PROCESSED / "postcodes.parquet")
 postcodes, nodes, edges = add_to_graph(postcodes, nodes, edges, 1)
 ev = add_topk(ev, postcodes)
-ev
 
 routing = Routing(
     name="ev",
