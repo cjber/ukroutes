@@ -49,6 +49,7 @@ class Routing:
         targets: pd.DataFrame,
         weights: str = "time_weighted",
         buffer: int = 100_000,
+        cutoff: int = 60,
     ):
         self.name: str = name
         self.sources: cudf.DataFrame = sources
@@ -58,6 +59,7 @@ class Routing:
         self.road_nodes: cudf.GeoDataFrame = nodes
         self.weights: str = weights
         self.buffer: int = buffer
+        self.cutoff: int = cutoff
 
         self.graph = cugraph.Graph()
         self.graph.from_cudf_edgelist(
@@ -123,7 +125,7 @@ class Routing:
     def get_shortest_dists(self, target: NamedTuple) -> None:
         sub_graph = self.create_sub_graph(target=target) if self.buffer else self.graph
         shortest_paths: cudf.DataFrame = cugraph.filter_unreachable(
-            cugraph.sssp(sub_graph, source=target.node_id)
+            cugraph.sssp(sub_graph, source=target.node_id, cutoff=self.cutoff)
         )
         pc_dist = shortest_paths[shortest_paths.vertex.isin(self.sources["node_id"])]
         pc_dist.to_pandas().to_sql("distances", self.engine, if_exists="append")
