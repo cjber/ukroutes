@@ -1,4 +1,5 @@
 import cudf
+import cugraph
 import geopandas as gpd
 import numpy as np
 import pandas as pd
@@ -28,7 +29,7 @@ def process_ev():
     return ev
 
 
-ev = process_ev()
+ev = process_ev().sample(1_000)
 # process_os()
 
 nodes: cudf.DataFrame = cudf.from_pandas(
@@ -37,8 +38,35 @@ nodes: cudf.DataFrame = cudf.from_pandas(
 edges: cudf.DataFrame = cudf.from_pandas(
     pd.read_parquet(Paths.OS_GRAPH / "edges.parquet")
 )
-ev, nodes, edges = add_to_graph(ev, nodes, edges, 1)
 
+
+def filter_deadends(nodes, edges):
+    G = cugraph.Graph()
+    G.from_cudf_edgelist(
+        edges, source="start_node", destination="end_node", edge_attr="time_weighted"
+    )
+    components = cugraph.connected_components(G)
+    component_counts = components["labels"].value_counts().reset_index()
+    component_counts.columns = ["labels", "count"]
+
+    largest_component_label = component_counts[
+        component_counts["count"] == component_counts["count"].max()
+    ]["labels"][0]
+
+    largest_component_nodes = components[
+        components["labels"] == largest_component_label
+    ]["vertex"]
+    filtered_edges = edges[
+        edges["start_node"].isin(largest_component_nodes)
+        & edges["end_node"].isin(largest_component_nodes)
+    ]
+    filtered_nodes = nodes[nodes["node_id"].isin(largest_component_nodes)]
+    return filtered_nodes, filtered_edges
+
+
+nodes, edges = filter_deadends(nodes, edges)
+
+ev, nodes, edges = add_to_graph(ev, nodes, edges, 1)
 postcodes = pd.read_parquet(Paths.PROCESSED / "postcodes.parquet")
 postcodes, nodes, edges = add_to_graph(postcodes, nodes, edges, 1)
 ev = add_topk(ev, postcodes, 1)
