@@ -29,7 +29,7 @@ def process_ev():
     return ev
 
 
-ev = process_ev().sample(1_000)
+ev = process_ev()
 # process_os()
 
 nodes: cudf.DataFrame = cudf.from_pandas(
@@ -67,7 +67,7 @@ def filter_deadends(nodes, edges):
 nodes, edges = filter_deadends(nodes, edges)
 
 ev, nodes, edges = add_to_graph(ev, nodes, edges, 1)
-postcodes = pd.read_parquet(Paths.PROCESSED / "postcodes.parquet")
+postcodes = pd.read_parquet(Paths.PROCESSED / "postcodes.parquet").sample(100)
 postcodes, nodes, edges = add_to_graph(postcodes, nodes, edges, 1)
 ev = add_topk(ev, postcodes, 1)
 
@@ -85,7 +85,7 @@ routing = Routing(
 routing.fit()
 distances = routing.fetch_distances()
 
-distances = (
+istances = (
     distances.set_index("vertex")
     .join(postcodes.set_index("node_id"), how="right")
     .reset_index()

@@ -112,6 +112,8 @@ class Routing:
             with warnings.catch_warnings():
                 warnings.simplefilter(action="ignore", category=FutureWarning)
                 sub_graph = cugraph.subgraph(self.graph, nodes_subset["node_id"])
+                sub_graph = self._remove_partial_graphs(sub_graph)
+
                 if sub_graph is None:
                     if buffer >= self.max_buffer:
                         sub_graph = self.graph
@@ -125,6 +127,23 @@ class Routing:
             if df_node & (ntarget_nds == len(target.top_nodes)) or buffer >= 1_000_000:
                 return sub_graph
             buffer = buffer * 2
+
+    def _remove_partial_graphs(self, sub_graph):
+        components = cugraph.connected_components(sub_graph)
+        component_counts = components["labels"].value_counts().reset_index()
+        component_counts.columns = ["labels", "count"]
+
+        largest_component_label = component_counts[
+            component_counts["count"] == component_counts["count"].max()
+        ]["labels"][0]
+
+        largest_component_nodes = components[
+            components["labels"] == largest_component_label
+        ]["vertex"]
+        nodes_subset = self.road_nodes[
+            self.road_nodes["node_id"].isin(largest_component_nodes)
+        ]
+        return cugraph.subgraph(self.graph, nodes_subset["node_id"])
 
     def get_shortest_dists(self, target: NamedTuple) -> None:
         sub_graph = self.create_sub_graph(target=target)
