@@ -61,14 +61,16 @@ class Routing:
         self.buffer: int = buffer
         self.cutoff: int = cutoff
 
-        self.graph = cugraph.Graph()
-        self.graph.from_cudf_edgelist(
-            self.road_edges,
-            source="start_node",
-            destination="end_node",
-            edge_attr=self.weights,
-            renumber=False,
-        )
+        with warnings.catch_warnings():
+            warnings.simplefilter(action="ignore", category=FutureWarning)
+            self.graph = cugraph.Graph()
+            self.graph.from_cudf_edgelist(
+                self.road_edges,
+                source="start_node",
+                destination="end_node",
+                edge_attr=self.weights,
+                renumber=False,
+            )
 
         self.distances: cudf.DataFrame = cudf.DataFrame()
 
