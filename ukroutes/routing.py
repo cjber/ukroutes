@@ -48,7 +48,8 @@ class Routing:
         sources: cudf.DataFrame,
         targets: pd.DataFrame,
         weights: str = "time_weighted",
-        buffer: int = 100_000,
+        min_buffer: int = 5_000,
+        max_buffer: int = 1_000_000,
         cutoff: int | None = None,
     ):
         self.name: str = name
@@ -58,7 +59,8 @@ class Routing:
         self.road_edges: cudf.DataFrame = edges
         self.road_nodes: cudf.GeoDataFrame = nodes
         self.weights: str = weights
-        self.buffer: int = buffer
+        self.min_buffer: int = min_buffer
+        self.max_buffer: int = max_buffer
         self.cutoff: int = cutoff
 
         with warnings.catch_warnings():
@@ -98,28 +100,26 @@ class Routing:
         logger.debug(f"Routing complete for {self.name} in {tdiff / 60:.2f} minutes.")
 
     def create_sub_graph(self, target) -> cugraph.Graph:
-        buffer = max(self.buffer, target.buffer)
+        buffer = max(self.min_buffer, target.buffer)
         while True:
             nodes_subset = self.road_nodes.copy()
             nodes_subset["distance"] = cp.sqrt(
                 (nodes_subset["easting"] - target.easting) ** 2
                 + (nodes_subset["northing"] - target.northing) ** 2
             )
-            nodes_subset = nodes_subset[nodes_subset["distance"] <= self.buffer]
+            nodes_subset = nodes_subset[nodes_subset["distance"] <= buffer]
 
             with warnings.catch_warnings():
                 warnings.simplefilter(action="ignore", category=FutureWarning)
                 sub_graph = cugraph.subgraph(self.graph, nodes_subset["node_id"])
                 if sub_graph is None:
-                    if buffer >= 1_000_000:
+                    if buffer >= self.max_buffer:
                         sub_graph = self.graph
-                        return sub_graph
+                        return None
                     buffer = buffer * 2
                     continue
 
-            ntarget_nds = (
-                cudf.Series(target.top_nodes).isin(sub_graph.nodes()).sum()
-            )
+            ntarget_nds = cudf.Series(target.top_nodes).isin(sub_graph.nodes()).sum()
             df_node = target.node_id in sub_graph.nodes().to_arrow().to_pylist()
 
             if df_node & (ntarget_nds == len(target.top_nodes)) or buffer >= 1_000_000:
@@ -127,7 +127,9 @@ class Routing:
             buffer = buffer * 2
 
     def get_shortest_dists(self, target: NamedTuple) -> None:
-        sub_graph = self.create_sub_graph(target=target) if self.buffer else self.graph
+        sub_graph = self.create_sub_graph(target=target)
+        if sub_graph is None:
+            return
         shortest_paths: cudf.DataFrame = cugraph.filter_unreachable(
             cugraph.sssp(sub_graph, source=target.node_id, cutoff=self.cutoff)
         )
