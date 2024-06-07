@@ -28,7 +28,7 @@ def process_ev():
     return ev
 
 
-ev = process_ev()[:1000]
+ev = process_ev()
 # process_os()
 
 nodes: cudf.DataFrame = cudf.from_pandas(
@@ -41,7 +41,7 @@ ev, nodes, edges = add_to_graph(ev, nodes, edges, 1)
 
 postcodes = pd.read_parquet(Paths.PROCESSED / "postcodes.parquet")
 postcodes, nodes, edges = add_to_graph(postcodes, nodes, edges, 1)
-ev = add_topk(ev, postcodes)
+ev = add_topk(ev, postcodes, 1)
 
 routing = Routing(
     name="ev",
@@ -50,8 +50,9 @@ routing = Routing(
     sources=postcodes,
     targets=ev,
     weights="time_weighted",
-    buffer=5_000,
-    cutoff=60,
+    min_buffer=5_000,
+    max_buffer=1_000_000,
+    cutoff=None,
 )
 routing.fit()
 distances = routing.fetch_distances()
