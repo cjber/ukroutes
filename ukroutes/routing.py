@@ -121,9 +121,8 @@ class Routing:
             subgraph_nodes = sub_graph.nodes().to_arrow().to_pylist()
             if subgraph_nodes:
                 df_node = target.node_id in subgraph_nodes
-
-            if df_node & (ntarget_nds == len(target.top_nodes)) or buffer >= 1_000_000:
-                return sub_graph
+                if df_node & (ntarget_nds == len(target.top_nodes)) or buffer >= 1_000_000:
+                    return sub_graph
             buffer = buffer * 2
 
     def get_shortest_dists(self, target: NamedTuple) -> None:
