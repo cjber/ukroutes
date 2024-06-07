@@ -59,6 +59,7 @@ def add_topk(df, target, k=10):
         .reset_index()
         .rename(columns={"node_id": "top_nodes"})
         .drop("level_1", axis=1)
+        .dropna()
         .groupby("df_idx")
         .agg(list)
         .join(df, how="right")

@@ -117,12 +117,14 @@ class Routing:
                     buffer = buffer * 2
                     continue
 
-            ntarget_nds = cudf.Series(target.top_nodes).isin(sub_graph.nodes()).sum()
-            subgraph_nodes = sub_graph.nodes().to_arrow().to_pylist()
-            if subgraph_nodes:
-                df_node = target.node_id in subgraph_nodes
-                if df_node & (ntarget_nds == len(target.top_nodes)) or buffer >= 1_000_000:
-                    return sub_graph
+            try:
+                ntarget_nds = cudf.Series(target.top_nodes).isin(sub_graph.nodes()).sum()
+                df_node = target.node_id in sub_graph.nodes().to_arrow().to_pylist()
+            except:
+                __import__('ipdb').set_trace()
+
+            if df_node & (ntarget_nds == len(target.top_nodes)) or buffer >= 1_000_000:
+                return sub_graph
             buffer = buffer * 2
 
     def get_shortest_dists(self, target: NamedTuple) -> None:
