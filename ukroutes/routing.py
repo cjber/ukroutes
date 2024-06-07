@@ -117,11 +117,10 @@ class Routing:
                     buffer = buffer * 2
                     continue
 
-            try:
-                ntarget_nds = cudf.Series(target.top_nodes).isin(sub_graph.nodes()).sum()
-                df_node = target.node_id in sub_graph.nodes().to_arrow().to_pylist()
-            except:
-                __import__('ipdb').set_trace()
+            ntarget_nds = (
+                cudf.Series(target.top_nodes).isin(sub_graph.nodes()).sum()
+            )
+            df_node = target.node_id in sub_graph.nodes().to_arrow().to_pylist()
 
             if df_node & (ntarget_nds == len(target.top_nodes)) or buffer >= 1_000_000:
                 return sub_graph

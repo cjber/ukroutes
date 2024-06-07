@@ -82,4 +82,4 @@ def add_topk(df, target, k=10):
     )
     df = df[df["top_nodes"].apply(lambda x: isinstance(x, list))]
 
-    return df.merge(buffers, on="node_id", how="left")
+    return df.merge(buffers, on="node_id", how="left").dropna()
