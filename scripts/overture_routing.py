@@ -26,8 +26,8 @@ for file in Path("./data/processed/overture").glob("*.parquet"):
         name=name,
         edges=edges,
         nodes=nodes,
-        sources=postcodes,
-        targets=overture,
+        outputs=postcodes,
+        inputs=overture,
         weights="time_weighted",
     )
     routing.fit()

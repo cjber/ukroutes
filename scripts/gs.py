@@ -29,7 +29,7 @@ def process_ev():
     return ev
 
 
-ev = process_ev().sample(100)
+gs = pd.read_parquet("./data/cillian/osgsl.parquet")
 # process_os()
 
 nodes: cudf.DataFrame = cudf.from_pandas(
@@ -65,32 +65,31 @@ def filter_deadends(nodes, edges):
 
 
 nodes, edges = filter_deadends(nodes, edges)
-ev, nodes, edges = add_to_graph(ev, nodes, edges, 1)
+gs, nodes, edges = add_to_graph(gs, nodes, edges, 1)
 
-postcodes = pd.read_parquet(Paths.PROCESSED / "postcodes.parquet")
+uprn = pd.read_parquet("./data/cillian/postcodes.parquet")
 # postcodes = postcodes[postcodes["postcode"].str.contains(r"^L\d")]
-postcodes, nodes, edges = add_to_graph(postcodes, nodes, edges, 1)
-ev = add_topk(ev, postcodes, 10)
+uprn, nodes, edges = add_to_graph(uprn, nodes, edges, 1)
+gs, uprn = add_topk(gs, uprn, 10)
 
 routing = Routing(
-    name="ev",
+    name="gs",
     edges=edges,
     nodes=nodes,
-    outputs=postcodes,
-    inputs=ev,
+    outputs=uprn,
+    inputs=gs,
     weights="time_weighted",
     min_buffer=5000,
     max_buffer=500_000,
-    # cutoff=60,
 )
 routing.fit()
+routing.distances
 
 distances = (
     routing.distances.set_index("vertex")
-    .join(cudf.from_pandas(postcodes).set_index("node_id"), how="right")
+    .join(cudf.from_pandas(uprn).set_index("node_id"), how="right")
     .reset_index()
 )
-routing.distances
 
 OUT_FILE = Paths.OUT_DATA / "distances_ev.csv"
 distances.to_pandas()[["postcode", "distance"]].to_csv(OUT_FILE, index=False)

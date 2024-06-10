@@ -16,45 +16,21 @@ from ukroutes.common.logger import logger
 
 
 class Routing:
-    """
-    Main class for calculating routing from POI to postcodes within a road network.
-
-    Primarily uses `cugraph` to GPU accelerate routing. While the interest is distance
-    from postcodes to POI, this class does routing from POI to postcodes, appending to
-    a large intermediate file. When complete the routing takes the minimum distance
-    for each postcode.
-
-    Parameters
-    ----------
-    name : str
-        Name of POI
-    edges : cudf.DataFrame
-        Dataframe containing road edges
-    nodes : cudf.DataFrame
-        Dataframe containing road nodes
-    postcodes : cudf.DataFrame
-        Dataframe containing all postcodes
-    pois : pd.DataFrame
-        Dataframe containing all POIs
-    weights : str
-        Graph weights to use, e.g. `time_weighted` or `distance`
-    """
-
     def __init__(
         self,
         name: str,
         edges: cudf.DataFrame,
         nodes: cudf.DataFrame,
-        sources: cudf.DataFrame,
-        targets: pd.DataFrame,
+        outputs: cudf.DataFrame,
+        inputs: cudf.DataFrame,
         weights: str = "time_weighted",
         min_buffer: int = 5_000,
         max_buffer: int = 1_000_000,
         cutoff: int | None = None,
     ):
         self.name: str = name
-        self.sources: cudf.DataFrame = sources
-        self.targets: pd.DataFrame = targets
+        self.outputs: cudf.DataFrame = outputs
+        self.inputs: cudf.DataFrame = inputs
 
         self.road_edges: cudf.DataFrame = edges
         self.road_nodes: cudf.GeoDataFrame = nodes
@@ -76,11 +52,6 @@ class Routing:
 
         self.distances: cudf.DataFrame = cudf.DataFrame()
 
-        db_path = Path("distances.db")
-        if db_path.exists():
-            db_path.unlink()
-        self.engine = create_engine(f"sqlite:///{db_path}")
-
     def fit(self) -> None:
         """
         Iterate and apply routing to each POI
@@ -89,23 +60,26 @@ class Routing:
         logged. This means that if the routing is stopped midway it can be restarted.
         """
         t1 = time.time()
-        for target in track(
-            self.targets.itertuples(),
+        process_df = (
+            self.inputs if len(self.inputs) < len(self.outputs) else self.outputs
+        )
+        for item in track(
+            process_df.itertuples(),
             description=f"Processing {self.name}...",
-            total=len(self.targets),
+            total=len(process_df),
         ):
-            self.get_shortest_dists(target)
+            self.get_shortest_dists(item)
         t2 = time.time()
         tdiff = t2 - t1
         logger.debug(f"Routing complete for {self.name} in {tdiff / 60:.2f} minutes.")
 
-    def create_sub_graph(self, target) -> cugraph.Graph:
-        buffer = max(self.min_buffer, target.buffer)
+    def create_sub_graph(self, item) -> cugraph.Graph:
+        buffer = max(self.min_buffer, item.buffer)
         while True:
             nodes_subset = self.road_nodes.copy()
             nodes_subset["distance"] = cp.sqrt(
-                (nodes_subset["easting"] - target.easting) ** 2
-                + (nodes_subset["northing"] - target.northing) ** 2
+                (nodes_subset["easting"] - item.easting) ** 2
+                + (nodes_subset["northing"] - item.northing) ** 2
             )
             nodes_subset = nodes_subset[nodes_subset["distance"] <= buffer]
 
@@ -121,10 +95,13 @@ class Routing:
                     buffer = buffer * 2
                     continue
 
-            ntarget_nds = cudf.Series(target.top_nodes).isin(sub_graph.nodes()).sum()
-            df_node = target.node_id in sub_graph.nodes().to_arrow().to_pylist()
+            ntarget_nds = cudf.Series(item.top_nodes).isin(sub_graph.nodes()).sum()
+            df_node = item.node_id in sub_graph.nodes().to_arrow().to_pylist()
 
-            if df_node & (ntarget_nds == len(target.top_nodes)) or buffer >= 1_000_000:
+            if (
+                df_node & (ntarget_nds == len(item.top_nodes))
+                or buffer >= self.max_buffer
+            ):
                 return sub_graph
             buffer = buffer * 2
 
@@ -145,20 +122,27 @@ class Routing:
         ]
         return cugraph.subgraph(self.graph, nodes_subset["node_id"])
 
-    def get_shortest_dists(self, target: NamedTuple) -> None:
-        sub_graph = self.create_sub_graph(target=target)
+    def get_shortest_dists(self, item: NamedTuple) -> None:
+        sub_graph = self.create_sub_graph(item=item)
         if sub_graph is None:
             return
-        shortest_paths: cudf.DataFrame = cugraph.filter_unreachable(
-            cugraph.sssp(sub_graph, source=target.node_id, cutoff=self.cutoff)
+        spaths: cudf.DataFrame = cugraph.filter_unreachable(
+            cugraph.sssp(sub_graph, source=item.node_id, cutoff=self.cutoff)
         )
-        pc_dist = shortest_paths[shortest_paths.vertex.isin(self.sources["node_id"])]
-        pc_dist.to_pandas().to_sql("distances", self.engine, if_exists="append")
-
-    def fetch_distances(self):
-        return (
-            pd.read_sql("distances", self.engine)
-            .sort_values("distance")
+        if len(self.inputs) > len(self.outputs):
+            min_dist = (
+                spaths[spaths.vertex.isin(self.inputs["node_id"])]
+                .sort_values("distance")
+                .iloc[0]
+            )
+            dist = cudf.DataFrame(
+                {"vertex": [item.node_id], "distance": [min_dist["distance"]]}
+            )
+        else:
+            dist = spaths[spaths.vertex.isin(self.outputs["node_id"])]
+        self.distances = cudf.concat([self.distances, dist])
+        self.distances = (
+            self.distances.sort_values("distance")
             .drop_duplicates("vertex")
             .reset_index()[["vertex", "distance"]]
         )

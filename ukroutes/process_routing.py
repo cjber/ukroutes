@@ -44,13 +44,34 @@ def add_to_graph(df, nodes, edges, k=10):
     )
 
 
-def add_topk(df, target, k=10):
-    df_tree = KDTree(df[["easting", "northing"]].values)
-    distances, indices = df_tree.query(target[["easting", "northing"]].values, k=k)
+def add_topk(input, output, k=10):
+    df_tree = KDTree(input[["easting", "northing"]].values)
+    distances, indices = df_tree.query(output[["easting", "northing"]].values, k=k)
+
+    if len(output) < len(input):
+        print("Output is smaller than input, returning output with buffers.")
+        output = (
+            pd.DataFrame(
+                {
+                    "node_id": output.loc[np.repeat(output.index, k)].reset_index(
+                        drop=True
+                    )["node_id"],
+                    "top_nodes": input.iloc[indices.flatten()]["node_id"]
+                    .reset_index(drop=True)
+                    .to_numpy(),
+                    "buffer": distances.flatten() + 0.01,
+                }
+            )
+            .groupby("node_id")
+            .agg({"top_nodes": list, "buffer": "max"})
+            .reset_index()
+            .merge(output[["node_id", "easting", "northing"]], on="node_id", how="left")
+        )
+        return input, output
 
     indices = pd.DataFrame(indices)
-    df = (
-        pd.concat([target.reset_index(drop=True), indices], axis=1)[
+    input = (
+        pd.concat([output.reset_index(drop=True), indices], axis=1)[
             ["node_id"] + indices.columns.tolist()
         ]
         .set_index("node_id")
@@ -62,9 +83,9 @@ def add_topk(df, target, k=10):
         .dropna()
         .groupby("df_idx")
         .agg(list)
-        .join(df, how="right")
+        .join(input, how="right")
     )
-    df["top_nodes"] = df["top_nodes"].apply(
+    input["top_nodes"] = input["top_nodes"].apply(
         lambda row: list(set(row)) if isinstance(row, list) else row
     )
     distances = pd.DataFrame(distances).stack().rename("buffer").reset_index()
@@ -73,13 +94,13 @@ def add_topk(df, target, k=10):
     buffers = (
         pd.DataFrame(
             {
-                "node_id": df.iloc[indices["node_id"].values]["node_id"],
+                "node_id": input.iloc[indices["node_id"].values]["node_id"],
                 "buffer": distances["buffer"].values,
             }
         )
         .sort_values("buffer", ascending=False)
         .drop_duplicates("node_id")
     )
-    df = df[df["top_nodes"].apply(lambda x: isinstance(x, list))]
+    input = input[input["top_nodes"].apply(lambda x: isinstance(x, list))]
 
-    return df.merge(buffers, on="node_id", how="left").dropna()
+    return input.merge(buffers, on="node_id", how="left").dropna(), output
