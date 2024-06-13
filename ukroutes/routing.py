@@ -2,15 +2,12 @@ from __future__ import annotations
 
 import time
 import warnings
-from pathlib import Path
 from typing import NamedTuple
 
 import cudf
 import cugraph
 import cupy as cp
-import pandas as pd
 from rich.progress import track
-from sqlalchemy import create_engine
 
 from ukroutes.common.logger import logger
 
