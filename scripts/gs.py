@@ -83,7 +83,6 @@ routing = Routing(
     max_buffer=500_000,
 )
 routing.fit()
-routing.distances
 
 distances = (
     routing.distances.set_index("vertex")
@@ -91,5 +90,15 @@ distances = (
     .reset_index()
 )
 
-OUT_FILE = Paths.OUT_DATA / "distances_ev.csv"
+OUT_FILE = Paths.OUT_DATA / "distances_greenspace_uprn.csv"
 distances.to_pandas()[["postcode", "distance"]].to_csv(OUT_FILE, index=False)
+
+distances = pd.read_csv("./data/out/distances_greenspace_uprn.csv")
+distances
+distances.reset_index().sort_values("distance").plot(
+    x="index", y="distance", kind="scatter"
+)
+
+import matplotlib.pyplot as plt
+
+plt.show()
