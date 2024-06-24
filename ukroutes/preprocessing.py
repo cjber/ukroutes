@@ -1,9 +1,10 @@
+import cudf
 import geopandas as gpd
 import polars as pl
 from scipy.spatial import KDTree
 
 from ukroutes.common.logger import logger
-from ukroutes.common.utils import Paths
+from ukroutes.common.utils import Paths, filter_deadends
 
 
 def process_road_edges() -> pl.DataFrame:
@@ -163,9 +164,13 @@ def process_os():
     nodes["node_id"] = nodes["node_id"].map(node_id_mapping)
     edges["start_node"] = edges["start_node"].map(node_id_mapping)
     edges["end_node"] = edges["end_node"].map(node_id_mapping)
-    nodes.to_parquet(Paths.OS_GRAPH / "nodes.parquet", index=False)
+
+    nodes, edges = filter_deadends(
+        cudf.from_pandas(nodes), cudf.from_pandas(edges)
+    )
+    nodes.to_pandas().to_parquet(Paths.OS_GRAPH / "nodes.parquet", index=False)
     logger.debug(f"Nodes saved to {Paths.OS_GRAPH / 'nodes.parquet'}")
-    edges.to_parquet(Paths.OS_GRAPH / "edges.parquet", index=False)
+    edges.to_pandas().to_parquet(Paths.OS_GRAPH / "edges.parquet", index=False)
     logger.debug(f"Edges saved to {Paths.OS_GRAPH / 'edges.parquet'}")
 
 

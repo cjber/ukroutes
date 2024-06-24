@@ -83,17 +83,17 @@ class Routing:
             with warnings.catch_warnings():
                 warnings.simplefilter(action="ignore", category=FutureWarning)
                 sub_graph = cugraph.subgraph(self.graph, nodes_subset["node_id"])
-                sub_graph = self._remove_partial_graphs(sub_graph)
+                main_sub_graph = self._remove_partial_graphs(sub_graph)
 
-                if sub_graph is None:
+                if main_sub_graph is None:
                     if buffer >= self.max_buffer:
-                        sub_graph = self.graph
+                        main_sub_graph = self.graph
                         return None
                     buffer = buffer * 2
                     continue
 
-            ntarget_nds = cudf.Series(item.top_nodes).isin(sub_graph.nodes()).sum()
-            df_node = item.node_id in sub_graph.nodes().to_arrow().to_pylist()
+            ntarget_nds = cudf.Series(item.top_nodes).isin(main_sub_graph.nodes()).sum()
+            df_node = item.node_id in main_sub_graph.nodes().to_arrow().to_pylist()
 
             if (
                 df_node & (ntarget_nds == len(item.top_nodes))
