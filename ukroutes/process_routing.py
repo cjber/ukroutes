@@ -103,4 +103,4 @@ def add_topk(input, output, k=10):
     )
     input = input[input["top_nodes"].apply(lambda x: isinstance(x, list))]
 
-    return input.merge(buffers, on="node_id", how="left").dropna(), output
+    return input.merge(buffers, on="node_id", how="left").dropna()

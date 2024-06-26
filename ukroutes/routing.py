@@ -127,16 +127,16 @@ class Routing:
             cugraph.sssp(sub_graph, source=item.node_id, cutoff=self.cutoff)
         )
         # if len(self.inputs) > len(self.outputs):
-        min_dist = (
-            spaths[spaths.vertex.isin(self.inputs["node_id"])]
-            .sort_values("distance")
-            .iloc[0]
-        )
-        dist = cudf.DataFrame(
-            {"vertex": [item.node_id], "distance": [min_dist["distance"]]}
-        )
+        # min_dist = (
+        #     spaths[spaths.vertex.isin(self.inputs["node_id"])]
+        #     .sort_values("distance")
+        #     .iloc[0]
+        # )
+        # dist = cudf.DataFrame(
+        #     {"vertex": [item.node_id], "distance": [min_dist["distance"]]}
+        # )
         # else:
-        #     dist = spaths[spaths.vertex.isin(self.outputs["node_id"])]
+        dist = spaths[spaths.vertex.isin(self.outputs["node_id"])]
         self.distances = cudf.concat([self.distances, dist])
         self.distances = (
             self.distances.sort_values("distance")
