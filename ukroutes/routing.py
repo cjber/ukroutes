@@ -58,7 +58,7 @@ class Routing:
         """
         t1 = time.time()
         process_df = (
-            self.inputs if len(self.inputs) < len(self.outputs) else self.outputs
+            self.inputs  # if len(self.inputs) < len(self.outputs) else self.outputs
         )
         for item in track(
             process_df.itertuples(),
@@ -126,17 +126,17 @@ class Routing:
         spaths: cudf.DataFrame = cugraph.filter_unreachable(
             cugraph.sssp(sub_graph, source=item.node_id, cutoff=self.cutoff)
         )
-        if len(self.inputs) > len(self.outputs):
-            min_dist = (
-                spaths[spaths.vertex.isin(self.inputs["node_id"])]
-                .sort_values("distance")
-                .iloc[0]
-            )
-            dist = cudf.DataFrame(
-                {"vertex": [item.node_id], "distance": [min_dist["distance"]]}
-            )
-        else:
-            dist = spaths[spaths.vertex.isin(self.outputs["node_id"])]
+        # if len(self.inputs) > len(self.outputs):
+        min_dist = (
+            spaths[spaths.vertex.isin(self.inputs["node_id"])]
+            .sort_values("distance")
+            .iloc[0]
+        )
+        dist = cudf.DataFrame(
+            {"vertex": [item.node_id], "distance": [min_dist["distance"]]}
+        )
+        # else:
+        #     dist = spaths[spaths.vertex.isin(self.outputs["node_id"])]
         self.distances = cudf.concat([self.distances, dist])
         self.distances = (
             self.distances.sort_values("distance")
