@@ -22,6 +22,7 @@ def add_to_graph(df, nodes, edges, k=10):
     df["node_id"] = new_node_ids.get()
     new_nodes = df[["node_id", "easting", "northing"]]
     nodes = cudf.concat([nodes, cudf.from_pandas(new_nodes)])
+    nodes
 
     new_edges = cudf.DataFrame(
         {
@@ -47,27 +48,6 @@ def add_to_graph(df, nodes, edges, k=10):
 def add_topk(input, output, k=10):
     df_tree = KDTree(input[["easting", "northing"]].values)
     distances, indices = df_tree.query(output[["easting", "northing"]].values, k=k)
-
-    # if len(output) < len(input):
-    #     print("Output is smaller than input, returning output with buffers.")
-    #     output = (
-    #         pd.DataFrame(
-    #             {
-    #                 "node_id": output.loc[np.repeat(output.index, k)].reset_index(
-    #                     drop=True
-    #                 )["node_id"],
-    #                 "top_nodes": input.iloc[indices.flatten()]["node_id"]
-    #                 .reset_index(drop=True)
-    #                 .to_numpy(),
-    #                 "buffer": distances.flatten() + 0.01,
-    #             }
-    #         )
-    #         .groupby("node_id")
-    #         .agg({"top_nodes": list, "buffer": "max"})
-    #         .reset_index()
-    #         .merge(output[["node_id", "easting", "northing"]], on="node_id", how="left")
-    #     )
-    #     return input, output
 
     indices = pd.DataFrame(indices)
     input = (

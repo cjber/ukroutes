@@ -57,13 +57,10 @@ class Routing:
         logged. This means that if the routing is stopped midway it can be restarted.
         """
         t1 = time.time()
-        process_df = (
-            self.inputs  # if len(self.inputs) < len(self.outputs) else self.outputs
-        )
         for item in track(
-            process_df.itertuples(),
+            self.inputs.itertuples(),
             description=f"Processing {self.name}...",
-            total=len(process_df),
+            total=len(self.inputs),
         ):
             self.get_shortest_dists(item)
         t2 = time.time()
@@ -78,19 +75,35 @@ class Routing:
                 (nodes_subset["easting"] - item.easting) ** 2
                 + (nodes_subset["northing"] - item.northing) ** 2
             )
-            nodes_subset = nodes_subset[nodes_subset["distance"] <= buffer]
+            nodes_subset = (
+                nodes_subset[nodes_subset["distance"] <= buffer]["node_id"]
+                .unique()
+                .to_pandas()
+                .tolist()
+            )
+            edges_subset = self.road_edges.copy()
+            edges_subset = edges_subset[
+                edges_subset["start_node"].isin(nodes_subset)
+                | edges_subset["end_node"].isin(nodes_subset)
+            ]
 
             with warnings.catch_warnings():
                 warnings.simplefilter(action="ignore", category=FutureWarning)
-                sub_graph = cugraph.subgraph(self.graph, nodes_subset["node_id"])
-                main_sub_graph = self._remove_partial_graphs(sub_graph)
+                sub_graph = cugraph.Graph()
+                sub_graph.from_cudf_edgelist(
+                    edges_subset,
+                    source="start_node",
+                    destination="end_node",
+                    edge_attr=self.weights,
+                )
+                main_sub_graph = self._remove_partial_graphs(sub_graph, edges_subset)
 
-                if main_sub_graph is None:
-                    if buffer >= self.max_buffer:
-                        main_sub_graph = self.graph
-                        return None
-                    buffer = buffer * 2
-                    continue
+            if main_sub_graph is None:
+                if buffer >= self.max_buffer:
+                    return sub_graph
+                buffer = buffer * 2
+                print(f"Missing graph, Buffer increased to {buffer}")
+                continue
 
             ntarget_nds = cudf.Series(item.top_nodes).isin(main_sub_graph.nodes()).sum()
             df_node = item.node_id in main_sub_graph.nodes().to_arrow().to_pylist()
@@ -101,23 +114,29 @@ class Routing:
             ):
                 return sub_graph
             buffer = buffer * 2
+            print(f"Buffer increased to {buffer}")
 
-    def _remove_partial_graphs(self, sub_graph):
+    def _remove_partial_graphs(self, sub_graph, edges_subset):
         components = cugraph.connected_components(sub_graph)
-        component_counts = components["labels"].value_counts().reset_index()
-        component_counts.columns = ["labels", "count"]
+        largest_component_label = components["labels"].mode()[0]
 
-        largest_component_label = component_counts[
-            component_counts["count"] == component_counts["count"].max()
-        ]["labels"][0]
-
-        largest_component_nodes = components[
-            components["labels"] == largest_component_label
-        ]["vertex"]
-        nodes_subset = self.road_nodes[
-            self.road_nodes["node_id"].isin(largest_component_nodes)
+        largest_component_nodes = set(
+            components[components["labels"] == largest_component_label]["vertex"]
+            .to_pandas()
+            .to_list()
+        )
+        filtered_edges = edges_subset[
+            edges_subset["start_node"].isin(largest_component_nodes)
+            | edges_subset["end_node"].isin(largest_component_nodes)
         ]
-        return cugraph.subgraph(self.graph, nodes_subset["node_id"])
+        main_sub_graph = cugraph.Graph()
+        main_sub_graph.from_cudf_edgelist(
+            filtered_edges,
+            source="start_node",
+            destination="end_node",
+            edge_attr=self.weights,
+        )
+        return main_sub_graph
 
     def get_shortest_dists(self, item: NamedTuple) -> None:
         sub_graph = self.create_sub_graph(item=item)
@@ -126,16 +145,6 @@ class Routing:
         spaths: cudf.DataFrame = cugraph.filter_unreachable(
             cugraph.sssp(sub_graph, source=item.node_id, cutoff=self.cutoff)
         )
-        # if len(self.inputs) > len(self.outputs):
-        # min_dist = (
-        #     spaths[spaths.vertex.isin(self.inputs["node_id"])]
-        #     .sort_values("distance")
-        #     .iloc[0]
-        # )
-        # dist = cudf.DataFrame(
-        #     {"vertex": [item.node_id], "distance": [min_dist["distance"]]}
-        # )
-        # else:
         dist = spaths[spaths.vertex.isin(self.outputs["node_id"])]
         self.distances = cudf.concat([self.distances, dist])
         self.distances = (

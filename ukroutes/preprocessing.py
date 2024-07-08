@@ -1,10 +1,14 @@
 import cudf
+from scipy.spatial import distance_matrix
+import pandas as pd
+import cugraph
 import geopandas as gpd
 import polars as pl
 from scipy.spatial import KDTree
 
 from ukroutes.common.logger import logger
 from ukroutes.common.utils import Paths, filter_deadends
+from ukroutes.process_routing import add_to_graph
 
 
 def process_road_edges() -> pl.DataFrame:
@@ -149,10 +153,45 @@ def ferry_routes(road_nodes: pl.DataFrame) -> tuple[pl.DataFrame, pl.DataFrame]:
     )
 
 
+def combine_subgraphs(nodes, edges):
+    graph = cugraph.Graph()
+    graph.from_cudf_edgelist(
+        cudf.from_pandas(edges), source="start_node", destination="end_node"
+    )
+    components = cugraph.connected_components(graph)
+    component_counts = components["labels"].value_counts().reset_index()
+
+    largest_component_label = component_counts[
+        component_counts["count"] == component_counts["count"].max()
+    ]["labels"][0]
+    largest_component = components[components["labels"] == largest_component_label]
+    largest_cn = nodes[nodes["node_id"].isin(largest_component["vertex"].to_pandas())]
+    largest_ce = edges[
+        edges["start_node"].isin(largest_component["vertex"].to_pandas())
+        | edges["end_node"].isin(largest_component["vertex"].to_pandas())
+    ]
+
+    subgraph_component_labels = component_counts[
+        component_counts["labels"] != largest_component_label
+    ]["labels"]
+    subgraph_component = components[
+        components["labels"].isin(subgraph_component_labels)
+    ]
+    sub_cn = nodes[nodes["node_id"].isin(subgraph_component["vertex"].to_pandas())]
+
+    _, nodes, edges = add_to_graph(
+        sub_cn,
+        cudf.from_pandas(largest_cn),
+        cudf.from_pandas(largest_ce),
+    )
+    return nodes, edges
+
+
 def process_os():
     logger.info("Starting OS highways processing...")
     edges = process_road_edges()
     nodes = process_road_nodes()
+
     ferry_nodes, ferry_edges = ferry_routes(nodes)
     nodes = pl.concat([nodes, ferry_nodes]).to_pandas()
     edges = pl.concat([edges, ferry_edges]).to_pandas()
@@ -165,9 +204,9 @@ def process_os():
     edges["start_node"] = edges["start_node"].map(node_id_mapping)
     edges["end_node"] = edges["end_node"].map(node_id_mapping)
 
-    nodes, edges = filter_deadends(
-        cudf.from_pandas(nodes), cudf.from_pandas(edges)
-    )
+    # nodes, edges = filter_deadends(cudf.from_pandas(nodes), cudf.from_pandas(edges))
+    nodes, edges = combine_subgraphs(nodes, edges)
+
     nodes.to_pandas().to_parquet(Paths.OS_GRAPH / "nodes.parquet", index=False)
     logger.debug(f"Nodes saved to {Paths.OS_GRAPH / 'nodes.parquet'}")
     edges.to_pandas().to_parquet(Paths.OS_GRAPH / "edges.parquet", index=False)
