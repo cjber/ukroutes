@@ -148,7 +148,7 @@ Despite the addition of ferry routes connecting isolated road networks on island
 
 2. **Add Postcodes and POIs to the road network**
 
-The `add_to_graph` function creates new nodes at the location of a collection of easting and northing coordinates. These nodes are then added to the road network by generating a new edge between this point and the nearest `k` road nodes, with a speed estimate of 25mph.
+The `add_to_graph` function creates new nodes at the location of a collection of easting and northing coordinates. These nodes are then added to the road network by generating a new edge between this point and the nearest `k` road nodes using a `KDTree`, with a speed estimate of 25mph.
 
 3. **Determine the top `k` POIs to each postcode**
 
