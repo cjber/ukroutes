@@ -146,8 +146,15 @@ def process_oproad(outdir: Paths | None = None) -> [pd.DataFrame, pd.DataFrame]:
     nodes = process_road_nodes()
 
     ferry_nodes, ferry_edges = ferry_routes(nodes)
-    nodes = pl.concat([nodes, ferry_nodes]).to_pandas()
-    edges = pl.concat([edges, ferry_edges]).to_pandas()
+    nodes = pl.concat([nodes, ferry_nodes]).to_pandas().drop_duplicates("node_id")
+    edges = (
+        pl.concat([edges, ferry_edges])
+        .to_pandas()
+        .drop_duplicates(["start_node", "end_node"])
+    )
+
+    nodes, edges = filter_deadends(cudf.from_pandas(nodes), cudf.from_pandas(edges))
+    nodes, edges = nodes.to_pandas(), edges.to_pandas()
 
     unique_node_ids = nodes["node_id"].unique()
     node_id_mapping = {
@@ -157,14 +164,14 @@ def process_oproad(outdir: Paths | None = None) -> [pd.DataFrame, pd.DataFrame]:
     edges["start_node"] = edges["start_node"].map(node_id_mapping)
     edges["end_node"] = edges["end_node"].map(node_id_mapping)
 
-    nodes, edges = filter_deadends(cudf.from_pandas(nodes), cudf.from_pandas(edges))
+    nodes, edges = cudf.from_pandas(nodes), cudf.from_pandas(edges)
 
     if outdir:
         nodes.to_pandas().to_parquet(Paths.OS_GRAPH / "nodes.parquet", index=False)
         edges.to_pandas().to_parquet(Paths.OS_GRAPH / "edges.parquet", index=False)
-        return nodes, edges
+        return nodes.reset_index(drop=True), edges.reset_index(drop=True)
     else:
-        return nodes, edges
+        return nodes.reset_index(drop=True), edges.reset_index(drop=True)
 
 
 if __name__ == "__main__":

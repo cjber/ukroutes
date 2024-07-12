@@ -22,7 +22,6 @@ def add_to_graph(df, nodes, edges, k=10):
     df["node_id"] = new_node_ids.get()
     new_nodes = df[["node_id", "easting", "northing"]]
     nodes = cudf.concat([nodes, cudf.from_pandas(new_nodes)])
-
     new_edges = cudf.DataFrame(
         {
             "start_node": df.loc[np.repeat(df.index, k)].reset_index(drop=True)[
