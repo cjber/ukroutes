@@ -31,8 +31,6 @@ click==8.1.7
 cloudpickle==3.0.0
     # via dask
     # via distributed
-contourpy==1.2.1
-    # via matplotlib
 cuda-python==12.5.0
     # via cudf-cu12
     # via pylibraft-cu12
@@ -47,8 +45,6 @@ cupy-cuda12x==13.2.0
     # via cudf-cu12
     # via cugraph-cu12
     # via dask-cudf-cu12
-cycler==0.12.1
-    # via matplotlib
 dask==2024.5.1
     # via dask-expr
     # via distributed
@@ -73,8 +69,6 @@ executing==2.0.1
     # via stack-data
 fastrlock==0.8.2
     # via cupy-cuda12x
-fonttools==4.53.1
-    # via matplotlib
 frozenlist==1.4.1
     # via aiohttp
     # via aiosignal
@@ -98,8 +92,6 @@ jinja2==3.1.4
     # via distributed
 joblib==1.4.2
     # via raft-dask-cu12
-kiwisolver==1.4.5
-    # via matplotlib
 libucx-cu12==1.15.0.post1
     # via ucx-py-cu12
     # via ucxx-cu12
@@ -112,8 +104,6 @@ markdown-it-py==3.0.0
     # via rich
 markupsafe==2.1.5
     # via jinja2
-matplotlib==3.9.1
-    # via ukroutes
 matplotlib-inline==0.1.7
     # via ipython
 mdurl==0.1.2
@@ -131,14 +121,12 @@ numba==0.60.0
     # via raft-dask-cu12
     # via rmm-cu12
 numpy==1.26.4
-    # via contourpy
     # via cudf-cu12
     # via cugraph-cu12
     # via cupy-cuda12x
     # via dask-cuda
     # via dask-cudf-cu12
     # via geopandas
-    # via matplotlib
     # via numba
     # via pandas
     # via pyarrow
@@ -157,7 +145,6 @@ packaging==24.1
     # via dask
     # via distributed
     # via geopandas
-    # via matplotlib
     # via pyogrio
 pandas==2.2.2
     # via cudf-cu12
@@ -171,8 +158,6 @@ partd==1.4.2
     # via dask
 pexpect==4.9.0
     # via ipython
-pillow==10.4.0
-    # via matplotlib
 polars==1.1.0
     # via ukroutes
 prompt-toolkit==3.0.47
@@ -203,18 +188,9 @@ pynvml==11.4.1
 pyogrio==0.9.0
     # via geopandas
     # via ukroutes
-pyparsing==3.1.2
-    # via matplotlib
 pyproj==3.6.1
     # via geopandas
-pyqt6==6.7.0
-    # via ukroutes
-pyqt6-qt6==6.7.2
-    # via pyqt6
-pyqt6-sip==13.6.0
-    # via pyqt6
 python-dateutil==2.9.0.post0
-    # via matplotlib
     # via pandas
 pytz==2024.1
     # via pandas
