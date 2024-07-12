@@ -133,3 +133,27 @@ plt.show()
 ```
 
 ![](./figs/health_example.png)
+
+# Routing Methodology
+
+The primary goal of this project is to determine the distance of points of interest to each postcode within Great Britain. Given there are over 1.7 million postcodes, instead of routing from each postcode to each point of interest, the processing is inverted, routing from points of interest to postcodes within a buffer. The following gives an overview of the sequential processing involved to achieve this.
+
+1. **Process the OS Open Road Network**
+
+Ordnance Survey publish road speed estimates alongside their road network documentation. These estimates are used to provide average speed estimates and subsequent drive-time estimates using the length of `linestring` geometries. For example the road speed estimate for all motorways is 67mph, while for single carriageway A and B roads the estimate is 25mph. These speeds are converted to drive-time in minutes using the road length.
+
+OS Open Roads does not include ferry routes. These were therefore taken from OpenStreetMap (OSM), using the Overpass API (http://overpass-turbo.eu) with the query found [here](http://overpass-turbo.eu/?q=LyoKVGhpcyBoYcSGYmVlbiBnxI1lcmF0ZWQgYnkgdGhlIG92xJJwxIlzLXR1cmJvIHdpemFyZC7EgsSdxJ9yaWdpbmFsIHNlxLBjaMSsxIk6CsOiwoDCnHJvdcSVPWbEknJ5xYjCnQoqLwpbxYx0Ompzb25dW3RpbWXFmzoyNV07Ci8vxI_ElMSdciByZXN1bHRzCigKICDFryBxdcSSxJrEo3J0IGZvcjogxYjFisWbZcWPxZHFk8KAxZXGgG5vZGVbIsWLxY1lIj0ixZByxZIiXSh7e2LEqnh9fSnFrcaAd2F5xp_GocSVxqTGpsaWxqrGrMauxrDGssa0xb_FtWVsxJRpxaDGusaTxr3Gp8apxqvGrcavb8axxrPFrceFxoJwxLduxorFtsW4xbrFvMWbxJjGnHnFrT7Frcejc2vHiMaDdDs&c=BH1aTWQmgG). `KDTree` from `scipy.spatial` was then used to determine the nearest road node point to the start and end location of these routes, allowing for them to be added directly to the road network. The speed estimate for these routes is 25mph, around the speed of an average ferry.
+
+Despite the addition of ferry routes connecting isolated road networks on islands to the mainland, there were still road nodes that did not connect directly to the road network. These did not appear to follow any pattern; distributed evenly across GB. These were therefore removed using the `cugraph.connected_components()` function.
+
+2. **Add Postcodes and POIs to the road network**
+
+The `add_to_graph` function creates new nodes at the location of a collection of easting and northing coordinates. These nodes are then added to the road network by generating a new edge between this point and the nearest `k` road nodes, with a speed estimate of 25mph.
+
+3. **Determine the top `k` POIs to each postcode**
+
+The function `add_topk` determines the top `k` POI nodes to each postcode node. This function then determines which POI are associated with each postcode as a list, and assigns a buffer to each POI, indicating the Euclidean distance to the furthest postcode. This information is then used for the routing.
+
+4. **Routing from POIs to postcodes**
+
+While the interest is in determining the distance from postcodes to POIs, the previous processing allows for a large speed-up by consering the reverse of this task. The `Routing` class in `routing.py` primarily routes using the Single Source Shortest Path `cugraph.sssp` algorithm, which allows for weighted routing from a single source to all other nodes in a graph. The graph itself is therefore filtered for each POI using the buffer determined in the `add_topk` function, and increased (if required) until all important postcodes relating to a POI are found within this subgraph. This approach means that for each postcode, the minimum returned distance indicates the nearest POI by drive-time.
