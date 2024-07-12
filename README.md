@@ -75,7 +75,12 @@ from ukroutes.oproad.utils import process_oproad
 nodes, edges = process_oproad(outdir=Paths.OS_GRAPH)  # or outdir=None
 
 # read in health dataa and postcodes
-health = pd.read_parquet("./data/processed/health.parquet").dropna().sample(1000)
+health = (
+    pd.read_parquet("./data/processed/health.parquet")
+    .dropna()
+    .sample(10)
+    .reset_index(drop=True)
+)
 postcodes = pd.read_csv(
     "./data/raw/onspd/ONSPD_FEB_2024.csv",
     usecols=["PCD", "OSEAST1M", "OSNRTH1M", "DOTERM", "CTRY"],
@@ -88,6 +93,7 @@ postcodes = (
     .drop(columns=["DOTERM", "CTRY"])
     .rename({"PCD": "postcode", "OSEAST1M": "easting", "OSNRTH1M": "northing"}, axis=1)
     .dropna()
+    .reset_index(drop=True)
 )
 
 # add health and postcodes to road network
@@ -111,12 +117,11 @@ routing = Routing(
 routing.fit()
 
 # join distances to postcodes
-distances = (
-    routing.distances.set_index("vertex")
-    .join(cudf.from_pandas(postcodes).set_index("node_id"), how="right")
-    .reset_index()
-    .to_pandas()
+distances = gpd.GeoDataFrame(
+    distances, geometry=gpd.points_from_xy(distances.easting, distances.northing)
 )
+distances.loc[distances["distance"] > 60, "distance"] = 60
+
 ```
 
 This example code produces the following result:
@@ -124,10 +129,12 @@ This example code produces the following result:
 ```python
 import matplotlib.pyplot as plt
 
-distances = gpd.GeoDataFrame(
-    distances, geometry=gpd.points_from_xy(distances.easting, distances.northing)
+fig, ax = plt.subplots()
+distances.reset_index().sort_values("distance").plot(
+    column="distance", cmap="viridis_r", legend=True, markersize=0.5, ax=ax
 )
-distances.reset_index().sort_values("distance").plot(column="distance")
+health.plot(x="easting", y="northing", color="red", ax=ax, kind="scatter", s=1)
+ax.set_axis_off()
 
 plt.show()
 ```
@@ -152,8 +159,8 @@ The `add_to_graph` function creates new nodes at the location of a collection of
 
 3. **Determine the top `k` POIs to each postcode**
 
-The function `add_topk` determines the top `k` POI nodes to each postcode node. This function then determines which POI are associated with each postcode as a list, and assigns a buffer to each POI, indicating the Euclidean distance to the furthest postcode. This information is then used for the routing.
+The function `add_topk` determines the top `k` POI nodes to each postcode node. This function then determines which POI are associated with each postcode and saves them as a list, then assigns a buffer to each POI, indicating the Euclidean distance to the furthest postcode. This information is then used for the routing.
 
 4. **Routing from POIs to postcodes**
 
-While the interest is in determining the distance from postcodes to POIs, the previous processing allows for a large speed-up by consering the reverse of this task. The `Routing` class in `routing.py` primarily routes using the Single Source Shortest Path `cugraph.sssp` algorithm, which allows for weighted routing from a single source to all other nodes in a graph. The graph itself is therefore filtered for each POI using the buffer determined in the `add_topk` function, and increased (if required) until all important postcodes relating to a POI are found within this subgraph. This approach means that for each postcode, the minimum returned distance indicates the nearest POI by drive-time.
+While the interest is in determining the distance from postcodes to POIs, the previous processing allows for a large speed-up by considering the reverse of this task. The `Routing` class in `routing.py` primarily routes using the Single Source Shortest Path `cugraph.sssp` algorithm, which allows for weighted routing from a single source to all other nodes in a graph. The graph itself is therefore filtered for each POI using the buffer determined in the `add_topk` function, and increased (if required) until all important postcodes relating to a POI are found within this subgraph. This approach means that for each postcode, the minimum returned distance indicates the nearest POI by drive-time.
