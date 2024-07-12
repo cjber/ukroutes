@@ -1,33 +1,28 @@
 from __future__ import annotations
+from tqdm import tqdm
 
-import time
 import warnings
 from typing import NamedTuple
 
 import cudf
 import cugraph
 import cupy as cp
-from rich.progress import track
-
-from ukroutes.common.logger import logger
 
 
 class Routing:
     def __init__(
         self,
-        name: str,
         edges: cudf.DataFrame,
         nodes: cudf.DataFrame,
-        outputs: cudf.DataFrame,
         inputs: cudf.DataFrame,
+        outputs: cudf.DataFrame,
         weights: str = "time_weighted",
         min_buffer: int = 5_000,
         max_buffer: int = 1_000_000,
         cutoff: int | None = None,
     ):
-        self.name: str = name
-        self.outputs: cudf.DataFrame = outputs
         self.inputs: cudf.DataFrame = inputs
+        self.outputs: cudf.DataFrame = outputs
 
         self.road_edges: cudf.DataFrame = edges
         self.road_nodes: cudf.GeoDataFrame = nodes
@@ -50,22 +45,8 @@ class Routing:
         self.distances: cudf.DataFrame = cudf.DataFrame()
 
     def fit(self) -> None:
-        """
-        Iterate and apply routing to each POI
-
-        This function primarily allows for the intermediate steps in routing to be
-        logged. This means that if the routing is stopped midway it can be restarted.
-        """
-        t1 = time.time()
-        for item in track(
-            self.inputs.itertuples(),
-            description=f"Processing {self.name}...",
-            total=len(self.inputs),
-        ):
+        for item in tqdm(self.inputs.itertuples(), total=len(self.inputs)):
             self.get_shortest_dists(item)
-        t2 = time.time()
-        tdiff = t2 - t1
-        logger.debug(f"Routing complete for {self.name} in {tdiff / 60:.2f} minutes.")
 
     def create_sub_graph(self, item) -> cugraph.Graph:
         buffer = max(self.min_buffer, item.buffer)
@@ -102,7 +83,6 @@ class Routing:
                 if buffer >= self.max_buffer:
                     return sub_graph
                 buffer = buffer * 2
-                print(f"Missing graph, Buffer increased to {buffer}")
                 continue
 
             ntarget_nds = cudf.Series(item.top_nodes).isin(main_sub_graph.nodes()).sum()
@@ -114,7 +94,6 @@ class Routing:
             ):
                 return sub_graph
             buffer = buffer * 2
-            print(f"Buffer increased to {buffer}")
 
     def _remove_partial_graphs(self, sub_graph, edges_subset):
         components = cugraph.connected_components(sub_graph)

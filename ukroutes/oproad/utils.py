@@ -1,14 +1,12 @@
 import cudf
-from scipy.spatial import distance_matrix
-import pandas as pd
 import cugraph
 import geopandas as gpd
 import polars as pl
+import pandas as pd
 from scipy.spatial import KDTree
+from shapely import Point
 
-from ukroutes.common.logger import logger
 from ukroutes.common.utils import Paths, filter_deadends
-from ukroutes.process_routing import add_to_graph
 
 
 def process_road_edges() -> pl.DataFrame:
@@ -34,10 +32,7 @@ def process_road_edges() -> pl.DataFrame:
 
     road_edges: pl.DataFrame = pl.from_pandas(
         gpd.read_file(
-            Paths.OPROAD,
-            layer="road_link",
-            ignore_geometry=True,
-            engine="pyogrio",  # much faster
+            Paths.OPROAD, layer="road_link", ignore_geometry=True, engine="pyogrio"
         )
     )
 
@@ -98,97 +93,55 @@ def process_road_nodes() -> pl.DataFrame:
     )
 
 
-def ferry_routes(road_nodes: pl.DataFrame) -> tuple[pl.DataFrame, pl.DataFrame]:
+def ferry_routes(nodes: pl.DataFrame) -> tuple[pl.DataFrame, pl.DataFrame]:
     # http://overpass-turbo.eu/?q=LyoKVGhpcyBoYcSGYmVlbiBnxI1lcmF0ZWQgYnkgdGhlIG92xJJwxIlzLXR1cmJvIHdpemFyZC7EgsSdxJ9yaWdpbmFsIHNlxLBjaMSsxIk6CsOiwoDCnHJvdcSVPWbEknJ5xYjCnQoqLwpbxYx0Ompzb25dW3RpbWXFmzoyNV07Ci8vxI_ElMSdciByZXN1bHRzCigKICDFryBxdcSSxJrEo3J0IGZvcjogxYjFisWbZcWPxZHFk8KAxZXGgG5vZGVbIsWLxY1lIj0ixZByxZIiXSh7e2LEqnh9fSnFrcaAd2F5xp_GocSVxqTGpsaWxqrGrMauxrDGssa0xb_FtWVsxJRpxaDGusaTxr3Gp8apxqvGrcavb8axxrPFrceFxoJwxLduxorFtsW4xbrFvMWbxJjGnHnFrT7Frcejc2vHiMaDdDs&c=BH1aTWQmgG
 
     ferries = gpd.read_file(Paths.RAW / "oproad" / "ferries.geojson")[
-        ["id", "geometry"]
+        ["geometry"]
     ].to_crs("EPSG:27700")
-    ferry_nodes = (
-        ferries[ferries["id"].str.startswith("node")].copy().reset_index(drop=True)
-    )
-    ferry_nodes["easting"], ferry_nodes["northing"] = (
-        ferry_nodes.geometry.x,
-        ferry_nodes.geometry.y,
-    )
-    ferry_edges = (
-        ferries[ferries["id"].str.startswith("relation")]
-        .explode(index_parts=False)
-        .copy()
-        .reset_index(drop=True)
-    )
-    road_nodes = road_nodes.to_pandas().copy()
+    ferries = ferries[~ferries["geometry"].apply(lambda x: isinstance(x, Point))]
 
-    nodes_tree = KDTree(road_nodes[["easting", "northing"]].values)
-    distances, indices = nodes_tree.query(ferry_nodes[["easting", "northing"]].values)
-    ferry_nodes["node_id"] = road_nodes.iloc[indices]["node_id"].reset_index(drop=True)
+    ferry_edges = ferries[["geometry"]].explode().copy()
 
-    ferry_edges["length"] = ferry_edges["geometry"].apply(lambda x: x.length)
+    ferry_edges["start_node"] = ferry_edges.geometry.apply(lambda x: x.coords[0])
+    ferry_edges["end_node"] = ferry_edges.geometry.apply(lambda x: x.coords[-1])
+    ferry_edges["length"] = ferry_edges.geometry.length
     ferry_edges = ferry_edges.assign(
         time_weighted=(ferry_edges["length"].astype(float) / 1000) / 25 * 1.609344 * 60
     )
-
-    ferry_edges["start_node"] = ferry_edges["geometry"].apply(lambda x: x.coords[0])
-    ferry_edges["easting"], ferry_edges["northing"] = (
-        ferry_edges["start_node"].apply(lambda x: x[0]),
-        ferry_edges["start_node"].apply(lambda x: x[1]),
+    ferry_nodes = pd.DataFrame(
+        {
+            "node_id": ferry_edges["start_node"].to_list()
+            + ferry_edges["end_node"].to_list()
+        }
     )
-    distances, indices = nodes_tree.query(ferry_edges[["easting", "northing"]])
-    ferry_edges["start_node"] = road_nodes.iloc[indices]["node_id"].reset_index(
-        drop=True
+    ferry_nodes["easting"] = ferry_nodes["node_id"].apply(lambda x: x[0])
+    ferry_nodes["northing"] = ferry_nodes["node_id"].apply(lambda x: x[1])
+    ferry_nodes = ferry_nodes.drop_duplicates().reset_index(drop=True)
+
+    ferry_nodes["node_id"] = ferry_nodes["node_id"].astype(str)
+    ferry_edges["start_node"] = ferry_edges["start_node"].astype(str)
+    ferry_edges["end_node"] = ferry_edges["end_node"].astype(str)
+
+    nodes_tree = KDTree(nodes[["easting", "northing"]])
+    distances, indices = nodes_tree.query(ferry_nodes[["easting", "northing"]], k=1)
+    mapping = dict(
+        zip(
+            ferry_nodes["node_id"], nodes.to_pandas().iloc[indices.flatten()]["node_id"]
+        )
+    )
+    ferry_nodes["node_id"] = ferry_nodes["node_id"].map(mapping)
+    ferry_edges["end_node"] = ferry_edges["end_node"].map(mapping)
+    ferry_edges["start_node"] = ferry_edges["start_node"].map(mapping)
+
+    return pl.from_pandas(
+        ferry_nodes[["node_id", "easting", "northing"]]
+    ), pl.from_pandas(
+        ferry_edges[["start_node", "end_node", "time_weighted", "length"]]
     )
 
-    ferry_edges["end_node"] = ferry_edges["geometry"].apply(lambda x: x.coords[-1])
-    ferry_edges["easting"], ferry_edges["northing"] = (
-        ferry_edges["end_node"].apply(lambda x: x[0]),
-        ferry_edges["end_node"].apply(lambda x: x[1]),
-    )
-    distances, indices = nodes_tree.query(ferry_edges[["easting", "northing"]])
-    ferry_edges["end_node"] = road_nodes.iloc[indices]["node_id"].reset_index(drop=True)
-    return (
-        pl.from_pandas(ferry_nodes[["node_id", "easting", "northing"]]),
-        pl.from_pandas(
-            ferry_edges[["start_node", "end_node", "time_weighted", "length"]]
-        ),
-    )
 
-
-def combine_subgraphs(nodes, edges):
-    graph = cugraph.Graph()
-    graph.from_cudf_edgelist(
-        cudf.from_pandas(edges), source="start_node", destination="end_node"
-    )
-    components = cugraph.connected_components(graph)
-    component_counts = components["labels"].value_counts().reset_index()
-
-    largest_component_label = component_counts[
-        component_counts["count"] == component_counts["count"].max()
-    ]["labels"][0]
-    largest_component = components[components["labels"] == largest_component_label]
-    largest_cn = nodes[nodes["node_id"].isin(largest_component["vertex"].to_pandas())]
-    largest_ce = edges[
-        edges["start_node"].isin(largest_component["vertex"].to_pandas())
-        | edges["end_node"].isin(largest_component["vertex"].to_pandas())
-    ]
-
-    subgraph_component_labels = component_counts[
-        component_counts["labels"] != largest_component_label
-    ]["labels"]
-    subgraph_component = components[
-        components["labels"].isin(subgraph_component_labels)
-    ]
-    sub_cn = nodes[nodes["node_id"].isin(subgraph_component["vertex"].to_pandas())]
-
-    _, nodes, edges = add_to_graph(
-        sub_cn,
-        cudf.from_pandas(largest_cn),
-        cudf.from_pandas(largest_ce),
-    )
-    return nodes, edges
-
-
-def process_os():
-    logger.info("Starting OS highways processing...")
+def process_oproad(outdir: Paths | None = None) -> [pd.DataFrame, pd.DataFrame]:
     edges = process_road_edges()
     nodes = process_road_nodes()
 
@@ -204,14 +157,15 @@ def process_os():
     edges["start_node"] = edges["start_node"].map(node_id_mapping)
     edges["end_node"] = edges["end_node"].map(node_id_mapping)
 
-    # nodes, edges = filter_deadends(cudf.from_pandas(nodes), cudf.from_pandas(edges))
-    nodes, edges = combine_subgraphs(nodes, edges)
+    nodes, edges = filter_deadends(cudf.from_pandas(nodes), cudf.from_pandas(edges))
 
-    nodes.to_pandas().to_parquet(Paths.OS_GRAPH / "nodes.parquet", index=False)
-    logger.debug(f"Nodes saved to {Paths.OS_GRAPH / 'nodes.parquet'}")
-    edges.to_pandas().to_parquet(Paths.OS_GRAPH / "edges.parquet", index=False)
-    logger.debug(f"Edges saved to {Paths.OS_GRAPH / 'edges.parquet'}")
+    if outdir:
+        nodes.to_pandas().to_parquet(Paths.OS_GRAPH / "nodes.parquet", index=False)
+        edges.to_pandas().to_parquet(Paths.OS_GRAPH / "edges.parquet", index=False)
+        return nodes, edges
+    else:
+        return nodes, edges
 
 
 if __name__ == "__main__":
-    process_os()
+    process_oproad(Paths.OS_GRAPH)
