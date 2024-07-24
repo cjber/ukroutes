@@ -169,10 +169,4 @@ def process_oproad(outdir: Paths | None = None) -> [pd.DataFrame, pd.DataFrame]:
     if outdir:
         nodes.to_pandas().to_parquet(Paths.OS_GRAPH / "nodes.parquet", index=False)
         edges.to_pandas().to_parquet(Paths.OS_GRAPH / "edges.parquet", index=False)
-        return nodes.reset_index(drop=True), edges.reset_index(drop=True)
-    else:
-        return nodes.reset_index(drop=True), edges.reset_index(drop=True)
-
-
-if __name__ == "__main__":
-    process_oproad(Paths.OS_GRAPH)
+    return nodes.reset_index(drop=True), edges.reset_index(drop=True)
