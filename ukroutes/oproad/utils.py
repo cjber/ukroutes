@@ -1,8 +1,10 @@
+from pathlib import Path
+from typing import Optional
+
 import cudf
-import cugraph
 import geopandas as gpd
-import polars as pl
 import pandas as pd
+import polars as pl
 from scipy.spatial import KDTree
 from shapely import Point
 
@@ -141,32 +143,38 @@ def ferry_routes(nodes: pl.DataFrame) -> tuple[pl.DataFrame, pl.DataFrame]:
     )
 
 
-def process_oproad(outdir: Paths | None = None) -> [pd.DataFrame, pd.DataFrame]:
-    edges = process_road_edges()
-    nodes = process_road_nodes()
+def process_oproad(
+    outdir: Optional[Path] = None,
+) -> tuple[cudf.DataFrame, cudf.DataFrame]:
+    edges_pl = process_road_edges()
+    nodes_pl = process_road_nodes()
 
-    ferry_nodes, ferry_edges = ferry_routes(nodes)
-    nodes = pl.concat([nodes, ferry_nodes]).to_pandas().drop_duplicates("node_id")
-    edges = (
-        pl.concat([edges, ferry_edges])
+    ferry_nodes, ferry_edges = ferry_routes(nodes_pl)
+    nodes_pl = pl.concat([nodes_pl, ferry_nodes]).to_pandas().drop_duplicates("node_id")
+    edges_pl = (
+        pl.concat([edges_pl, ferry_edges])
         .to_pandas()
         .drop_duplicates(["start_node", "end_node"])
     )
 
-    nodes, edges = filter_deadends(cudf.from_pandas(nodes), cudf.from_pandas(edges))
-    nodes, edges = nodes.to_pandas(), edges.to_pandas()
+    nodes_cu: cudf.DataFrame = cudf.from_pandas(nodes_pl)
+    edges_cu: cudf.DataFrame = cudf.from_pandas(edges_pl)
+    nodes_cu, edges_cu = filter_deadends(nodes_cu, edges_cu)
+    nodes_pd: pd.DataFrame = nodes_cu.to_pandas()
+    edges_pd: pd.DataFrame = edges_cu.to_pandas()
 
-    unique_node_ids = nodes["node_id"].unique()
+    unique_node_ids = nodes_pd["node_id"].unique()
     node_id_mapping = {
         node_id: new_id for new_id, node_id in enumerate(unique_node_ids)
     }
-    nodes["node_id"] = nodes["node_id"].map(node_id_mapping)
-    edges["start_node"] = edges["start_node"].map(node_id_mapping)
-    edges["end_node"] = edges["end_node"].map(node_id_mapping)
+    nodes_pd["node_id"] = nodes_pd["node_id"].map(node_id_mapping)
+    edges_pd["start_node"] = edges_pd["start_node"].map(node_id_mapping)
+    edges_pd["end_node"] = edges_pd["end_node"].map(node_id_mapping)
 
-    nodes, edges = cudf.from_pandas(nodes), cudf.from_pandas(edges)
+    nodes_cu: cudf.DataFrame = cudf.from_pandas(nodes_pd).reset_index(drop=True)
+    edges_cu: cudf.DataFrame = cudf.from_pandas(edges_pd).reset_index(drop=True)
 
     if outdir:
-        nodes.to_pandas().to_parquet(Paths.OS_GRAPH / "nodes.parquet", index=False)
-        edges.to_pandas().to_parquet(Paths.OS_GRAPH / "edges.parquet", index=False)
-    return nodes.reset_index(drop=True), edges.reset_index(drop=True)
+        nodes_cu.to_pandas().to_parquet(Paths.OS_GRAPH / "nodes.parquet", index=False)
+        edges_cu.to_pandas().to_parquet(Paths.OS_GRAPH / "edges.parquet", index=False)
+    return nodes_cu, edges_cu

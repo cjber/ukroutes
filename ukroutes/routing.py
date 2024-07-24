@@ -1,11 +1,10 @@
-from tqdm import tqdm
-
 import warnings
-from typing import NamedTuple
+from typing import NamedTuple, Optional
 
 import cudf
 import cugraph
 import cupy as cp
+from tqdm import tqdm
 
 
 class Routing:
@@ -18,17 +17,17 @@ class Routing:
         weights: str = "time_weighted",
         min_buffer: int = 5_000,
         max_buffer: int = 1_000_000,
-        cutoff: int | None = None,
+        cutoff: Optional[int] = None,
     ):
         self.inputs: cudf.DataFrame = inputs
         self.outputs: cudf.DataFrame = outputs
 
         self.road_edges: cudf.DataFrame = edges
-        self.road_nodes: cudf.GeoDataFrame = nodes
+        self.road_nodes: cudf.DataFrame = nodes
         self.weights: str = weights
         self.min_buffer: int = min_buffer
         self.max_buffer: int = max_buffer
-        self.cutoff: int = cutoff
+        self.cutoff: Optional[int] = cutoff
 
         with warnings.catch_warnings():
             warnings.simplefilter(action="ignore", category=FutureWarning)
@@ -95,7 +94,7 @@ class Routing:
             buffer = buffer * 2
 
     def _remove_partial_graphs(self, sub_graph, edges_subset):
-        components = cugraph.connected_components(sub_graph)
+        components: cudf.DataFrame = cugraph.connected_components(sub_graph)
         largest_component_label = components["labels"].mode()[0]
 
         largest_component_nodes = set(

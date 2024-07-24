@@ -1,4 +1,6 @@
 from pathlib import Path
+
+import cudf
 import cugraph
 
 
@@ -12,12 +14,14 @@ class Paths:
     OS_GRAPH = PROCESSED / "oproad"
 
 
-def filter_deadends(nodes, edges):
+def filter_deadends(
+    nodes: cudf.DataFrame, edges: cudf.DataFrame
+) -> tuple[cudf.DataFrame, cudf.DataFrame]:
     G = cugraph.Graph()
     G.from_cudf_edgelist(
         edges, source="start_node", destination="end_node", edge_attr="time_weighted"
     )
-    components = cugraph.connected_components(G)
+    components: cudf.DataFrame = cugraph.connected_components(G)
     component_counts = components["labels"].value_counts().reset_index()
     component_counts.columns = ["labels", "count"]
 
