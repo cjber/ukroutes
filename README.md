@@ -2,24 +2,9 @@
 
 This project uses `cugraph`, a RAPIDS library, to estimate drive times from source nodes to destination nodes on the UK road network.
 
-## Table of Contents
-- [Introduction](#introduction)
-- [Features](#features)
-- [Installation](#installation)
-- [Usage](#usage)
-- [Data Sources](#data-sources)
-- [Contributing](#contributing)
-- [Licence](#licence)
-
 ## Introduction
 
 This project aims to provide an efficient way to estimate drive times across the UK road network. By leveraging the GPU-accelerated graph analytics capabilities of `cugraph`, we can handle large-scale graph data and perform drive time estimations quickly.
-
-## Features
-
-- **GPU-accelerated computation**: Utilises `cugraph` for high-performance graph analytics.
-- **Drive time estimation**: Calculates estimated drive times between given source and destination nodes.
-- **Scalability**: Capable of handling large-scale road networks.
 
 ## Installation
 
@@ -27,7 +12,7 @@ This project aims to provide an efficient way to estimate drive times across the
 
 This project requires a CUDA-enabled GPU, and Python >=3.10 and <=3.11.
 
-You may install this project directly with pip using:
+You may install this project directly with pip (or similar) using:
 
 ```bash
 pip install git+https://github.com/cjber/ukroutes
@@ -57,7 +42,8 @@ Alternatively you can install the project locally, using the following steps:
 This project requires several data files that cannot be redistributed.
 
 * OS Open Roads - [download](https://www.ordnancesurvey.co.uk/products/os-open-roads)
-* ONS Postcodes - [download](https://geoportal.statistics.gov.uk/search?q=PRD_ONSPD&sort=Date%20Created%7Ccreated%7Cdesc)
+* ONS Postcodes - [download](https://geoportal.statistics.gov.uk/search?q=PRD_ONSPD&sort=Date%20Created%7Ccreated%7Cdesc) (Or similar target data)
+* Ferry Routes - [download](http://overpass-turbo.eu/?q=LyoKVGhpcyBoYcSGYmVlbiBnxI1lcmF0ZWQgYnkgdGhlIG92xJJwxIlzLXR1cmJvIHdpemFyZC7EgsSdxJ9yaWdpbmFsIHNlxLBjaMSsxIk6CsOiwoDCnHJvdcSVPWbEknJ5xYjCnQoqLwpbxYx0Ompzb25dW3RpbWXFmzoyNV07Ci8vxI_ElMSdciByZXN1bHRzCigKICDFryBxdcSSxJrEo3J0IGZvcjogxYjFisWbZcWPxZHFk8KAxZXGgG5vZGVbIsWLxY1lIj0ixZByxZIiXSh7e2LEqnh9fSnFrcaAd2F5xp_GocSVxqTGpsaWxqrGrMauxrDGssa0xb_FtWVsxJRpxaDGusaTxr3Gp8apxqvGrcavb8axxrPFrceFxoJwxLduxorFtsW4xbrFvMWbxJjGnHnFrT7Frcejc2vHiMaDdDs&c=BH1aTWQmgG)
 
 The following gives an example script that would be used to find the nearest 'health' assets to all Postcodes within the UK.
 
