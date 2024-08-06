@@ -79,9 +79,12 @@ def process_road_edges() -> pl.DataFrame:
             (((pl.col("length") / 1000) / pl.col("speed_estimate")) * 60).alias(
                 "time_weighted"
             ),
+            (((pl.col("length") / 1000) / 5) * 60).alias("pedestrian_time"),
         )
     )
-    return road_edges.select(["start_node", "end_node", "time_weighted", "length"])
+    return road_edges.select(
+        ["start_node", "end_node", "time_weighted", "length", "pedestrian_time"]
+    )
 
 
 def process_road_nodes() -> pl.DataFrame:
@@ -135,11 +138,14 @@ def ferry_routes(nodes: pl.DataFrame) -> tuple[pl.DataFrame, pl.DataFrame]:
     ferry_nodes["node_id"] = ferry_nodes["node_id"].map(mapping)
     ferry_edges["end_node"] = ferry_edges["end_node"].map(mapping)
     ferry_edges["start_node"] = ferry_edges["start_node"].map(mapping)
+    ferry_edges["pedestrian_time"] = ferry_edges["time_weighted"]
 
     return pl.from_pandas(
         ferry_nodes[["node_id", "easting", "northing"]]
     ), pl.from_pandas(
-        ferry_edges[["start_node", "end_node", "time_weighted", "length"]]
+        ferry_edges[
+            ["start_node", "end_node", "time_weighted", "length", "pedestrian_time"]
+        ]
     )
 
 

@@ -5,7 +5,7 @@ import pandas as pd
 from scipy.spatial import KDTree
 
 
-def add_to_graph(df, nodes, edges, k=10):
+def add_to_graph(df, nodes, edges, weights, k=10):
     nodes_tree = KDTree(nodes[["easting", "northing"]].values.get())
     distances, indices = nodes_tree.query(df[["easting", "northing"]].values, k=k)
 
@@ -31,9 +31,12 @@ def add_to_graph(df, nodes, edges, k=10):
             "length": nearest_nodes_df["distance"],
         }
     )
-    new_edges["time_weighted"] = (
-        (new_edges["length"].astype(float) / 1000) / 25 * 1.609344 * 60
-    )
+    if weights == "time_weighted":
+        new_edges[weights] = (
+            (new_edges["length"].astype(float) / 1000) / 25 * 1.609344 * 60
+        )
+    elif weights == "pedestrian_time":
+        new_edges[weights] = (new_edges["length"].astype(float) / 1000) / 5 * 60
     edges = cudf.concat([edges, new_edges])
 
     return (

@@ -1,17 +1,17 @@
 import cudf
-import matplotlib.pyplot as plt
 import geopandas as gpd
 import pandas as pd
 
 from ukroutes import Routing
 from ukroutes.common.utils import Paths
-from ukroutes.process_routing import add_to_graph, add_topk
 from ukroutes.oproad.utils import process_oproad
+from ukroutes.process_routing import add_to_graph, add_topk
 
 # process oproad nodes and edges
-nodes, edges = process_oproad()
+nodes, edges = process_oproad(outdir=Paths.OPROAD)
 
-# read in health dataa and postcodes
+
+# read in health data and postcodes
 health = (
     pd.read_parquet("./data/processed/health.parquet")
     .dropna()
@@ -35,8 +35,8 @@ postcodes = (
 )
 
 # add health and postcodes to road network
-health, nodes, edges = add_to_graph(health, nodes, edges, 1)
-postcodes, nodes, edges = add_to_graph(postcodes, nodes, edges, 1)
+health, nodes, edges = add_to_graph(health, nodes, edges, "pedestrian_time", 1)
+postcodes, nodes, edges = add_to_graph(postcodes, nodes, edges, "pedestrian_time", 1)
 
 # find the top 10 closest health facilities to each postcode
 health = add_topk(health, postcodes, 10)
@@ -48,7 +48,7 @@ routing = Routing(
     nodes=nodes,
     inputs=health,
     outputs=postcodes,
-    weights="time_weighted",
+    weights="pedestrian_time",
     min_buffer=5000,
     max_buffer=500_000,
     # cutoff=300,
@@ -62,6 +62,7 @@ distances = (
     .reset_index()
     .to_pandas()
 )
+distances
 
 
 distances = gpd.GeoDataFrame(
