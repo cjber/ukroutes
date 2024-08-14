@@ -7,7 +7,7 @@ import cugraph
 class Paths:
     DATA = Path("data")
     RAW = DATA / "raw"
-    OUT_DATA = DATA / "out"
+    OUT = DATA / "out"
     OPROAD = RAW / "oproad" / "oproad_gb.gpkg"
 
     PROCESSED = DATA / "processed"
