@@ -181,6 +181,6 @@ def process_oproad(
     edges_cu: cudf.DataFrame = cudf.from_pandas(edges_pd).reset_index(drop=True)
 
     if outdir:
-        nodes_cu.to_pandas().to_parquet(Paths.OS_GRAPH / "nodes.parquet", index=False)
-        edges_cu.to_pandas().to_parquet(Paths.OS_GRAPH / "edges.parquet", index=False)
+        nodes_cu.to_pandas().to_parquet(Paths.GRAPH / "nodes.parquet", index=False)
+        edges_cu.to_pandas().to_parquet(Paths.GRAPH / "edges.parquet", index=False)
     return nodes_cu, edges_cu
