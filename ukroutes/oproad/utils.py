@@ -1,7 +1,6 @@
 from pathlib import Path
 from typing import Optional
 
-import cudf
 import geopandas as gpd
 import pandas as pd
 import polars as pl

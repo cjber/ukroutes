@@ -30,13 +30,12 @@ class Route:
         )
 
     def route(self):
-        edge_list = list(
-            self.edges[["start_node", "end_node", "time_weighted"]].itertuples(
-                index=False, name=None
-            )
+        G = nx.from_pandas_edgelist(
+            self.edges,
+            source="start_node",
+            target="end_node",
+            edge_attr="time_weighted",
         )
-        G = nx.Graph()
-        G.add_weighted_edges_from(edge_list, weight="time_weighted")
 
         t1 = time.time()
         print("Starting CPU routing...")
