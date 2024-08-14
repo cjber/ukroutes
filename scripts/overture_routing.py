@@ -37,5 +37,5 @@ for file in Path("./data/processed/overture").glob("*.parquet"):
         .join(postcodes.set_index("node_id"), how="right")
         .reset_index()
     )
-    OUT_FILE = Paths.OUT_DATA / f"distances_{name}.csv"
+    OUT_FILE = Paths.OUT / f"distances_{name}.csv"
     distances.to_pandas()[["postcode", "distance"]].to_csv(OUT_FILE, index=False)

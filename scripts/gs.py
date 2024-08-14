@@ -40,35 +40,9 @@ edges: cudf.DataFrame = cudf.from_pandas(
 )
 
 
-def filter_deadends(nodes, edges):
-    G = cugraph.Graph()
-    G.from_cudf_edgelist(
-        edges, source="start_node", destination="end_node", edge_attr="time_weighted"
-    )
-    components = cugraph.connected_components(G)
-    component_counts = components["labels"].value_counts().reset_index()
-    component_counts.columns = ["labels", "count"]
-
-    largest_component_label = component_counts[
-        component_counts["count"] == component_counts["count"].max()
-    ]["labels"][0]
-
-    largest_component_nodes = components[
-        components["labels"] == largest_component_label
-    ]["vertex"]
-    filtered_edges = edges[
-        edges["start_node"].isin(largest_component_nodes)
-        & edges["end_node"].isin(largest_component_nodes)
-    ]
-    filtered_nodes = nodes[nodes["node_id"].isin(largest_component_nodes)]
-    return filtered_nodes, filtered_edges
-
-
-nodes, edges = filter_deadends(nodes, edges)
 gs, nodes, edges = add_to_graph(gs, nodes, edges, 1)
 
 uprn = pd.read_parquet("./data/cillian/postcodes.parquet")
-# postcodes = postcodes[postcodes["postcode"].str.contains(r"^L\d")]
 uprn, nodes, edges = add_to_graph(uprn, nodes, edges, 1)
 gs, uprn = add_topk(gs, uprn, 10)
 
@@ -90,7 +64,7 @@ distances = (
     .reset_index()
 )
 
-OUT_FILE = Paths.OUT_DATA / "distances_greenspace_uprn.csv"
+OUT_FILE = Paths.OUT / "distances_greenspace_uprn.csv"
 distances.to_pandas()[["postcode", "distance"]].to_csv(OUT_FILE, index=False)
 
 distances = pd.read_csv("./data/out/distances_greenspace_uprn.csv")
