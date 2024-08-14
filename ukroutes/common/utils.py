@@ -13,6 +13,7 @@ class Paths:
     GRAPH = PROCESSED / "oproad"
 
 
+# TODO: convert to nx
 def filter_deadends(nodes, edges):
     G = nx.from_pandas_edgelist(
         edges, source="start_node", target="end_node", edge_attr="time_weighted"

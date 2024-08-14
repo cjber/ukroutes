@@ -20,8 +20,13 @@ def process_dentists():
 
 process_dentists()
 
+postcodes = pd.read_parquet(Paths.PROCESSED / "postcodes.parquet")
+nodes = pd.read_parquet(Paths.PROCESSED / "oproad" / "nodes.parquet")
+edges = pd.read_parquet(Paths.PROCESSED / "oproad" / "edges.parquet")
+
 pq_files = list(Paths.PROCESSED.glob("*.parquet"))
 for file in tqdm(pq_files):
-    route = Route(file)
+    source = pd.read_parquet(file).dropna(subset=["easting", "northing"])
+    route = Route(source=source, target=postcodes, nodes=nodes, edges=edges)
     distances = route.route()
     distances.to_parquet(Paths.OUT / f"{file.stem}_distances.parquet")
