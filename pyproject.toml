@@ -6,13 +6,11 @@ authors = [
     { name = "cjber", email = "cjberragan@gmail.com" }
 ]
 dependencies = [
-    "cudf-cu12>=24.4.1",
-    "cugraph-cu12>=24.4.0",
-    "geopandas>=0.14.4",
-    "polars>=0.20.31",
-    "scipy>=1.13.1",
-    "pyogrio>=0.8.0",
+    "networkx>=3.3",
     "tqdm>=4.66.4",
+    "pandas>=2.2.2",
+    "scipy>=1.14.0",
+    "pyarrow>=17.0.0",
 ]
 readme = "README.md"
 requires-python = ">=3.10,<=3.11"
