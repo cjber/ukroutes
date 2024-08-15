@@ -13,17 +13,21 @@ class Paths:
     GRAPH = PROCESSED / "oproad"
 
 
-# TODO: convert to nx
-def filter_deadends(edges):
+def filter_deadends(nodes, edges):
     G = nx.from_pandas_edgelist(
         edges, source="start_node", target="end_node", edge_attr="time_weighted"
     )
     largest_cc = max(nx.connected_components(G), key=len)
     Gsub = G.subgraph(largest_cc)
 
-    return nx.to_pandas_edgelist(
+    edges = nx.to_pandas_edgelist(
         Gsub,
         source="start_node",
         target="end_node",
         edge_key="time_weighted",
     )
+    nodes = nodes[
+        nodes["node_id"].isin(edges["start_node"])
+        | nodes["node_id"].isin(edges["end_node"])
+    ]
+    return nodes, edges

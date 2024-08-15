@@ -128,7 +128,7 @@ def ferry_routes(nodes: pl.DataFrame) -> tuple[pl.DataFrame, pl.DataFrame]:
     ferry_edges["end_node"] = ferry_edges["end_node"].astype(str)
 
     nodes_tree = KDTree(nodes[["easting", "northing"]])
-    distances, indices = nodes_tree.query(ferry_nodes[["easting", "northing"]], k=1)
+    _, indices = nodes_tree.query(ferry_nodes[["easting", "northing"]], k=1)
     mapping = dict(
         zip(
             ferry_nodes["node_id"], nodes.to_pandas().iloc[indices.flatten()]["node_id"]
@@ -149,37 +149,33 @@ def ferry_routes(nodes: pl.DataFrame) -> tuple[pl.DataFrame, pl.DataFrame]:
 
 
 def process_oproad(
-    outdir: Optional[Path] = None,
-) -> tuple[cudf.DataFrame, cudf.DataFrame]:
+    save: Optional[bool] = None,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     edges_pl = process_road_edges()
     nodes_pl = process_road_nodes()
 
     ferry_nodes, ferry_edges = ferry_routes(nodes_pl)
-    nodes_pl = pl.concat([nodes_pl, ferry_nodes]).to_pandas().drop_duplicates("node_id")
-    edges_pl = (
+    nodes = pl.concat([nodes_pl, ferry_nodes]).to_pandas().drop_duplicates("node_id")
+    edges = (
         pl.concat([edges_pl, ferry_edges])
         .to_pandas()
         .drop_duplicates(["start_node", "end_node"])
     )
 
-    nodes_cu: cudf.DataFrame = cudf.from_pandas(nodes_pl)
-    edges_cu: cudf.DataFrame = cudf.from_pandas(edges_pl)
-    nodes_cu, edges_cu = filter_deadends(nodes_cu, edges_cu)
-    nodes_pd: pd.DataFrame = nodes_cu.to_pandas()
-    edges_pd: pd.DataFrame = edges_cu.to_pandas()
+    nodes, edges = filter_deadends(nodes, edges)
 
-    unique_node_ids = nodes_pd["node_id"].unique()
+    unique_node_ids = nodes["node_id"].unique()
     node_id_mapping = {
         node_id: new_id for new_id, node_id in enumerate(unique_node_ids)
     }
-    nodes_pd["node_id"] = nodes_pd["node_id"].map(node_id_mapping)
-    edges_pd["start_node"] = edges_pd["start_node"].map(node_id_mapping)
-    edges_pd["end_node"] = edges_pd["end_node"].map(node_id_mapping)
+    nodes["node_id"] = nodes["node_id"].map(node_id_mapping)
+    edges["start_node"] = edges["start_node"].map(node_id_mapping)
+    edges["end_node"] = edges["end_node"].map(node_id_mapping)
 
-    nodes_cu: cudf.DataFrame = cudf.from_pandas(nodes_pd).reset_index(drop=True)
-    edges_cu: cudf.DataFrame = cudf.from_pandas(edges_pd).reset_index(drop=True)
+    nodes = nodes.reset_index(drop=True)
+    edges = edges.reset_index(drop=True)
 
-    if outdir:
-        nodes_cu.to_pandas().to_parquet(Paths.GRAPH / "nodes.parquet", index=False)
-        edges_cu.to_pandas().to_parquet(Paths.GRAPH / "edges.parquet", index=False)
-    return nodes_cu, edges_cu
+    if save:
+        nodes.to_parquet(Paths.GRAPH / "nodes.parquet", index=False)
+        edges.to_parquet(Paths.GRAPH / "edges.parquet", index=False)
+    return nodes, edges
