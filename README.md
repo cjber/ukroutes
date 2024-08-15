@@ -64,9 +64,14 @@ def process_dentists():
 
 process_dentists()
 
+postcodes = pd.read_parquet(Paths.PROCESSED / "postcodes.parquet")
+nodes = pd.read_parquet(Paths.PROCESSED / "oproad" / "nodes.parquet")
+edges = pd.read_parquet(Paths.PROCESSED / "oproad" / "edges.parquet")
+
 pq_files = list(Paths.PROCESSED.glob("*.parquet"))
 for file in tqdm(pq_files):
-    route = Route(file)
+    source = pd.read_parquet(file).dropna(subset=["easting", "northing"])
+    route = Route(source=source, target=postcodes, nodes=nodes, edges=edges)
     distances = route.route()
     distances.to_parquet(Paths.OUT / f"{file.stem}_distances.parquet")
 ```
@@ -87,6 +92,6 @@ Despite the addition of ferry routes connecting isolated road networks on island
 
 The `add_to_graph` function creates new nodes at the location of a collection of easting and northing coordinates. These nodes are then added to the road network by generating a new edge between this point and the nearest `k` road nodes using a `KDTree`, with a speed estimate of 25mph.
 
-4. **Routing from POIs to postcodes**
+3. **Routing from POIs to postcodes**
 
 While the interest is in determining the distance from postcodes to POIs, the previous processing allows for a large speed-up by considering the reverse of this task. The `Route` class in `routing.py` primarily routes using the Multi Source Shortest Path `nx.multi_source_dijkstra` algorithm, which allows for weighted routing from points of interest to all other nodes in a graph. This approach means that for each postcode, the minimum returned distance indicates the nearest POI by drive-time.
