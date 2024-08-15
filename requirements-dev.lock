@@ -12,6 +12,9 @@
 -e file:.
 asttokens==2.4.1
     # via stack-data
+certifi==2024.7.4
+    # via pyogrio
+    # via pyproj
 decorator==5.1.1
     # via ipdb
     # via ipython
@@ -19,6 +22,8 @@ exceptiongroup==1.2.2
     # via ipython
 executing==2.0.1
     # via stack-data
+geopandas==1.0.1
+    # via ukroutes
 ipdb==0.13.13
 ipython==8.26.0
     # via ipdb
@@ -29,15 +34,24 @@ matplotlib-inline==0.1.7
 networkx==3.3
     # via ukroutes
 numpy==2.0.1
+    # via geopandas
     # via pandas
     # via pyarrow
+    # via pyogrio
     # via scipy
+    # via shapely
+packaging==24.1
+    # via geopandas
+    # via pyogrio
 pandas==2.2.2
+    # via geopandas
     # via ukroutes
 parso==0.8.4
     # via jedi
 pexpect==4.9.0
     # via ipython
+polars==1.5.0
+    # via ukroutes
 prompt-toolkit==3.0.47
     # via ipython
 ptyprocess==0.7.0
@@ -48,12 +62,18 @@ pyarrow==17.0.0
     # via ukroutes
 pygments==2.18.0
     # via ipython
+pyogrio==0.9.0
+    # via geopandas
+pyproj==3.6.1
+    # via geopandas
 python-dateutil==2.9.0.post0
     # via pandas
 pytz==2024.1
     # via pandas
 scipy==1.14.0
     # via ukroutes
+shapely==2.0.5
+    # via geopandas
 six==1.16.0
     # via asttokens
     # via python-dateutil
