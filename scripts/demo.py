@@ -2,6 +2,7 @@ import pandas as pd
 from tqdm import tqdm
 
 from ukroutes.common.utils import Paths
+from ukroutes.oproad.utils import process_oproad
 from ukroutes.routing import Route
 
 
@@ -20,9 +21,13 @@ def process_dentists():
 
 process_dentists()
 
-postcodes = pd.read_parquet(Paths.PROCESSED / "postcodes.parquet")
+postcodes = pd.read_parquet(Paths.PROCESSED / "onspd" / "postcodes.parquet")
+
+# To save time in future runs you may choose to save and load the processed data
+# nodes, edges = process_oproad(save=True)
 nodes = pd.read_parquet(Paths.PROCESSED / "oproad" / "nodes.parquet")
 edges = pd.read_parquet(Paths.PROCESSED / "oproad" / "edges.parquet")
+
 
 pq_files = list(Paths.PROCESSED.glob("*.parquet"))
 for file in tqdm(pq_files):
