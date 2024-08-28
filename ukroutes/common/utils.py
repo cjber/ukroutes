@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import networkx as nx
+import pandas as pd
 
 
 class Paths:
@@ -13,7 +14,9 @@ class Paths:
     GRAPH = PROCESSED / "oproad"
 
 
-def filter_deadends(nodes, edges):
+def filter_deadends(
+    nodes: pd.DataFrame, edges: pd.DataFrame
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     G = nx.from_pandas_edgelist(
         edges, source="start_node", target="end_node", edge_attr="time_weighted"
     )
@@ -29,5 +32,5 @@ def filter_deadends(nodes, edges):
     nodes = nodes[
         nodes["node_id"].isin(edges["start_node"])
         | nodes["node_id"].isin(edges["end_node"])
-    ]
+    ]  # type: ignore
     return nodes, edges
