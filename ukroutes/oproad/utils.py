@@ -1,35 +1,24 @@
-from pathlib import Path
 from typing import Optional
 
 import geopandas as gpd
 import pandas as pd
 import polars as pl
 from scipy.spatial import KDTree
-from shapely import Point
+from shapely.geometry import Point
 
 from ukroutes.common.utils import Paths, filter_deadends
 
 
-def process_road_edges() -> pl.DataFrame:
+def _process_road_edges() -> pl.DataFrame:
     """
-    Create time estimates for road edges based on OS documentation
+    Process road edges to estimate speed and time weights.
 
-    Time estimates based on speed estimates and edge length. Speed estimates
-    taken from OS documentation. This also filters to remove extra cols.
-
-    Parameters
-    ----------
-    edges : pd.DataFrame
-        OS highways df containing edges, and other metadata
-
-    Returns
-    -------
-    pd.DataFrame:
-        OS highways df with time weighted estimates
+    Returns:
+        pl.DataFrame: A DataFrame containing processed road edges with estimated speed and time weights.
     """
-
     a_roads = ["A Road", "A Road Primary"]
     b_roads = ["B Road", "B Road Primary"]
+    dual_carriageway = ["Dual Carriageway", "Collapsed Dual Carriageway"]
 
     road_edges: pl.DataFrame = pl.from_pandas(
         gpd.read_file(
@@ -42,20 +31,12 @@ def process_road_edges() -> pl.DataFrame:
             pl.when(pl.col("road_classification") == "Motorway")
             .then(67)
             .when(
-                (
-                    pl.col("form_of_way").is_in(
-                        ["Dual Carriageway", "Collapsed Dual Carriageway"]
-                    )
-                )
+                (pl.col("form_of_way").is_in(dual_carriageway))
                 & (pl.col("road_classification").is_in(a_roads))
             )
             .then(57)
             .when(
-                (
-                    pl.col("form_of_way").is_in(
-                        ["Dual Carriageway", "Collapsed Dual Carriageway"]
-                    )
-                )
+                (pl.col("form_of_way").is_in(dual_carriageway))
                 & (pl.col("road_classification").is_in(b_roads))
             )
             .then(45)
@@ -66,7 +47,7 @@ def process_road_edges() -> pl.DataFrame:
             .then(25)
             .when(pl.col("road_classification").is_in(["Unclassified"]))
             .then(24)
-            .when(pl.col("form_of_way").is_in(["Roundabout"]))
+            .when(pl.col("form_of_way") == "Roundabout")
             .then(10)
             .when(pl.col("form_of_way").is_in(["Track", "Layby"]))
             .then(5)
@@ -86,7 +67,13 @@ def process_road_edges() -> pl.DataFrame:
     )
 
 
-def process_road_nodes() -> pl.DataFrame:
+def _process_road_nodes() -> pl.DataFrame:
+    """
+    Process road nodes to extract easting and northing coordinates.
+
+    Returns:
+        pl.DataFrame: A DataFrame containing processed road nodes with easting and northing coordinates.
+    """
     road_nodes = gpd.read_file(Paths.OPROAD, layer="road_node", engine="pyogrio")
     road_nodes["easting"], road_nodes["northing"] = (
         road_nodes.geometry.x,
@@ -97,9 +84,16 @@ def process_road_nodes() -> pl.DataFrame:
     )
 
 
-def ferry_routes(nodes: pl.DataFrame) -> tuple[pl.DataFrame, pl.DataFrame]:
-    # http://overpass-turbo.eu/?q=LyoKVGhpcyBoYcSGYmVlbiBnxI1lcmF0ZWQgYnkgdGhlIG92xJJwxIlzLXR1cmJvIHdpemFyZC7EgsSdxJ9yaWdpbmFsIHNlxLBjaMSsxIk6CsOiwoDCnHJvdcSVPWbEknJ5xYjCnQoqLwpbxYx0Ompzb25dW3RpbWXFmzoyNV07Ci8vxI_ElMSdciByZXN1bHRzCigKICDFryBxdcSSxJrEo3J0IGZvcjogxYjFisWbZcWPxZHFk8KAxZXGgG5vZGVbIsWLxY1lIj0ixZByxZIiXSh7e2LEqnh9fSnFrcaAd2F5xp_GocSVxqTGpsaWxqrGrMauxrDGssa0xb_FtWVsxJRpxaDGusaTxr3Gp8apxqvGrcavb8axxrPFrceFxoJwxLduxorFtsW4xbrFvMWbxJjGnHnFrT7Frcejc2vHiMaDdDs&c=BH1aTWQmgG
+def _ferry_routes(nodes: pl.DataFrame) -> tuple[pl.DataFrame, pl.DataFrame]:
+    """
+    Process ferry routes to create ferry nodes and edges.
 
+    Args:
+        nodes (pl.DataFrame): DataFrame containing road nodes.
+
+    Returns:
+        tuple[pl.DataFrame, pl.DataFrame]: A tuple containing DataFrames for ferry nodes and ferry edges.
+    """
     ferries = gpd.read_file(Paths.RAW / "oproad" / "ferries.geojson")[
         ["geometry"]
     ].to_crs("EPSG:27700")
@@ -148,13 +142,20 @@ def ferry_routes(nodes: pl.DataFrame) -> tuple[pl.DataFrame, pl.DataFrame]:
     )
 
 
-def process_oproad(
-    save: Optional[bool] = None,
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    edges_pl = process_road_edges()
-    nodes_pl = process_road_nodes()
+def process_oproad(save: Optional[bool] = None) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Process the Ordnance Survey road data and optionally save the results.
 
-    ferry_nodes, ferry_edges = ferry_routes(nodes_pl)
+    Args:
+        save (Optional[bool]): If True, save the processed nodes and edges to parquet files.
+
+    Returns:
+        tuple[pd.DataFrame, pd.DataFrame]: A tuple containing DataFrames for nodes and edges.
+    """
+    edges_pl = _process_road_edges()
+    nodes_pl = _process_road_nodes()
+
+    ferry_nodes, ferry_edges = _ferry_routes(nodes_pl)
     nodes = pl.concat([nodes_pl, ferry_nodes]).to_pandas().drop_duplicates("node_id")
     edges = (
         pl.concat([edges_pl, ferry_edges])
