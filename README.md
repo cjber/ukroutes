@@ -1,6 +1,6 @@
-# UKRoutes
+![](./figs/logo/ukroutes-high-resolution-logo-transparent.png)
 
-This project uses `networkx` to estimate drive times from source nodes to destination nodes on the UK road network.
+> This project uses `networkx` to estimate drive times from source nodes to destination nodes on the UK road network.
 
 ## Installation
 

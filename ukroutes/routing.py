@@ -11,6 +11,16 @@ logger = setup_logging()
 
 
 class Route:
+    """
+    A class to represent a route calculation using network graphs.
+
+    Attributes:
+        source (pd.DataFrame): DataFrame containing source nodes.
+        target (pd.DataFrame): DataFrame containing target nodes.
+        nodes (pd.DataFrame): DataFrame containing all nodes.
+        edges (pd.DataFrame): DataFrame containing all edges.
+    """
+
     def __init__(
         self,
         source: pd.DataFrame,
@@ -20,6 +30,24 @@ class Route:
         weights: str = "time_weighted",
         k: int = 1,
     ):
+        """
+        Constructs all the necessary attributes for the Route object.
+
+        Parameters:
+        -----------
+        source : pd.DataFrame
+            DataFrame containing source nodes with easting and northing coordinates.
+        target : pd.DataFrame
+            DataFrame containing target nodes with easting and northing coordinates.
+        nodes : pd.DataFrame
+            DataFrame containing all nodes with easting and northing coordinates.
+        edges : pd.DataFrame
+            DataFrame containing edges between nodes.
+        weights : str, optional
+            The type of weight to use for edges (default is "time_weighted").
+        k : int, optional
+            The number of nearest neighbors to consider (default is 1).
+        """
         self.source = source
         self.nodes = nodes
         self.edges = edges
@@ -31,6 +59,19 @@ class Route:
         self.build()
 
     def add_to_graph(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Adds nodes from the given DataFrame to the graph and creates edges to the nearest nodes.
+
+        Parameters:
+        -----------
+        df : pd.DataFrame
+            DataFrame containing nodes to be added with easting and northing coordinates.
+
+        Returns:
+        --------
+        pd.DataFrame
+            DataFrame with added nodes including their new node IDs.
+        """
         nodes_tree = KDTree(self.nodes[["easting", "northing"]].values)  # type: ignore
         distances, indices = nodes_tree.query(
             df[["easting", "northing"]].values,  # type: ignore
@@ -70,6 +111,9 @@ class Route:
         return df
 
     def build(self) -> None:
+        """
+        Builds the graph by adding source and target nodes.
+        """
         logger.info("Building graph with source and target nodes")
         self.source = self.add_to_graph(self.source)
         logger.info("Source nodes added to graph")
@@ -77,6 +121,14 @@ class Route:
         logger.info("Target nodes added to graph")
 
     def route(self) -> pd.DataFrame:
+        """
+        Calculates the shortest path distances from source to target nodes.
+
+        Returns:
+        --------
+        pd.DataFrame
+            DataFrame containing the shortest path distances from source to target nodes.
+        """
         logger.info("Starting routing...")
         G = nx.from_pandas_edgelist(
             self.edges,
