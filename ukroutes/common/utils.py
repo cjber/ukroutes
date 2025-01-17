@@ -19,11 +19,9 @@ def filter_deadends(
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     G = nx.from_pandas_edgelist(edges, source="start_node", target="end_node")
     largest_cc = max(nx.connected_components(G), key=len)
-    Gsub = G.subgraph(largest_cc)
 
-    edges = nx.to_pandas_edgelist(Gsub, source="start_node", target="end_node")
-    nodes = nodes[
-        nodes["node_id"].isin(edges["start_node"])
-        | nodes["node_id"].isin(edges["end_node"])
-    ]  # type: ignore
+    nodes = nodes[nodes["node_id"].isin(largest_cc)]
+    edges = edges[
+        edges["start_node"].isin(largest_cc) | edges["end_node"].isin(largest_cc)
+    ]
     return nodes, edges
