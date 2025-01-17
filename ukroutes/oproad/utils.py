@@ -60,10 +60,18 @@ def _process_road_edges() -> pl.DataFrame:
                 "time_weighted"
             ),
             (((pl.col("length") / 1000) / 5) * 60).alias("pedestrian_time"),
+            ((pl.col("length") / 1000)).alias("distance"),
         )
     )
     return road_edges.select(
-        ["start_node", "end_node", "time_weighted", "length", "pedestrian_time"]
+        [
+            "start_node",
+            "end_node",
+            "time_weighted",
+            "length",
+            "pedestrian_time",
+            "distance",
+        ]
     )
 
 
@@ -105,7 +113,10 @@ def _ferry_routes(nodes: pl.DataFrame) -> tuple[pl.DataFrame, pl.DataFrame]:
     ferry_edges["end_node"] = ferry_edges.geometry.apply(lambda x: x.coords[-1])
     ferry_edges["length"] = ferry_edges.geometry.length
     ferry_edges = ferry_edges.assign(
-        time_weighted=(ferry_edges["length"].astype(float) / 1000) / 25 * 1.609344 * 60
+        time_weighted=(
+            (ferry_edges["length"].astype(float) / 1000) / 25 * 1.609344 * 60
+        ),
+        distance=(ferry_edges["length"].astype(float) / 1000),
     )
     ferry_nodes = pd.DataFrame(
         {
@@ -137,7 +148,14 @@ def _ferry_routes(nodes: pl.DataFrame) -> tuple[pl.DataFrame, pl.DataFrame]:
         ferry_nodes[["node_id", "easting", "northing"]]
     ), pl.from_pandas(
         ferry_edges[
-            ["start_node", "end_node", "time_weighted", "length", "pedestrian_time"]
+            [
+                "start_node",
+                "end_node",
+                "time_weighted",
+                "length",
+                "pedestrian_time",
+                "distance",
+            ]
         ]
     )
 
