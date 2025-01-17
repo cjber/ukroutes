@@ -106,6 +106,8 @@ class Route:
             new_edges[self.weights] = (
                 (new_edges["length"].astype(float) / 1000) / 5 * 60
             )
+        elif self.weights == "distance":
+            new_edges[self.weights] = new_edges["length"].astype(float) / 1000
 
         self.edges = pd.concat([self.edges, new_edges], ignore_index=True)
         return df
@@ -134,18 +136,18 @@ class Route:
             self.edges,
             source="start_node",
             target="end_node",
-            edge_attr="time_weighted",
+            edge_attr=self.weights,
         )
 
         t1 = time.time()
         distances = nx.multi_source_dijkstra_path_length(
-            G, sources=self.source["node_id"].to_list(), weight="time_weighted"
+            G, sources=self.source["node_id"].to_list(), weight=self.weights
         )
         t2 = time.time()
         logger.info(f"Routing took {t2 - t1:.2f} seconds")
 
         distances = pd.DataFrame(
-            {"node_id": distances.keys(), "time_weighted": distances.values()}
+            {"node_id": distances.keys(), self.weights: distances.values()}
         )
         distances = distances[distances["node_id"].isin(self.target["node_id"])]
         distances = self.target.merge(distances, on="node_id")
