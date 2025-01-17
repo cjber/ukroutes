@@ -17,18 +17,11 @@ class Paths:
 def filter_deadends(
     nodes: pd.DataFrame, edges: pd.DataFrame
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    G = nx.from_pandas_edgelist(
-        edges, source="start_node", target="end_node", edge_attr="time_weighted"
-    )
+    G = nx.from_pandas_edgelist(edges, source="start_node", target="end_node")
     largest_cc = max(nx.connected_components(G), key=len)
     Gsub = G.subgraph(largest_cc)
 
-    edges = nx.to_pandas_edgelist(
-        Gsub,
-        source="start_node",
-        target="end_node",
-        edge_key="time_weighted",
-    )
+    edges = nx.to_pandas_edgelist(Gsub, source="start_node", target="end_node")
     nodes = nodes[
         nodes["node_id"].isin(edges["start_node"])
         | nodes["node_id"].isin(edges["end_node"])
